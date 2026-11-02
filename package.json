@@ -38,7 +38,10 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:backend": "cd backend && npm install && npm run build",
+    "start:backend": "node backend/dist/server.cjs",
+    "backend": "cd backend && npm install && npm run build && npm start"
   },
   "private": true
 }
