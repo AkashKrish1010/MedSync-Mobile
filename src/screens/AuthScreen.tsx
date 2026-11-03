@@ -378,27 +378,17 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
               </View>
             )}
 
-            {/* Admin Login Credential Hint */}
+            {/* Admin Login Credential Notice */}
             {isLogin && role === "admin" && (
-              <TouchableOpacity
-                onPress={() => {
-                  setEmail("admin@medsync.io");
-                  setPassword("Admin@123");
-                }}
-                activeOpacity={0.8}
-                style={styles.adminCredHintBox}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <ShieldCheck size={15} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.adminCredHintTitle}>Institutional Administration</Text>
-                  </View>
-                  <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: "600" }}>Tap to Auto-fill</Text>
+              <View style={styles.adminCredHintBox}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <ShieldCheck size={15} color={Colors.primary} strokeWidth={2} />
+                  <Text style={styles.adminCredHintTitle}>Institutional Administration</Text>
                 </View>
                 <Text style={styles.credHintText}>
-                  Tap here to auto-fill administrator credentials (admin@medsync.io / Admin@123).
+                  Please sign in with the institutional credentials issued by your hospital system.
                 </Text>
-              </TouchableOpacity>
+              </View>
             )}
 
             {/* Submit */}
