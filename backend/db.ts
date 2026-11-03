@@ -304,6 +304,15 @@ export async function seedInitialDataIfEmpty() {
           uhid: "ADM-001",
           createdAt: new Date(),
         },
+        {
+          email: "admin@medsync.io",
+          password: hashedAdmin,
+          role: "admin",
+          name: "Alexander Wright",
+          phone: "+1 (555) 900-1122",
+          uhid: "ADM-001",
+          createdAt: new Date(),
+        },
       ]);
 
       // Seed Medications
@@ -407,6 +416,36 @@ export async function seedInitialDataIfEmpty() {
       ]);
 
       console.log("✅ [MongoDB] Initial clinical data seeded successfully!");
+    } else {
+      // Ensure admin accounts always exist even if users collection was already initialized
+      const adminExists = await UserModel.findOne({
+        email: { $in: ["admin@medsync.io", "ops.lead@medsync.io"] },
+      });
+      if (!adminExists) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedAdmin = await bcrypt.hash("Admin@123", salt);
+        await UserModel.create([
+          {
+            email: "admin@medsync.io",
+            password: hashedAdmin,
+            role: "admin",
+            name: "Alexander Wright",
+            phone: "+1 (555) 900-1122",
+            uhid: "ADM-001",
+            createdAt: new Date(),
+          },
+          {
+            email: "ops.lead@medsync.io",
+            password: hashedAdmin,
+            role: "admin",
+            name: "Alexander Wright",
+            phone: "+1 (555) 900-1122",
+            uhid: "ADM-001",
+            createdAt: new Date(),
+          },
+        ]);
+        console.log("🌱 [MongoDB] Ensured administrator accounts (admin@medsync.io, ops.lead@medsync.io) exist.");
+      }
     }
   } catch (err: any) {
     console.error("⚠️ [MongoDB] Seed error:", err.message);

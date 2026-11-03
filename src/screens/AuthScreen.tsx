@@ -92,12 +92,18 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     setLoading(true);
     setAuthStatus(isLogin ? "Signing in..." : "Creating account...");
 
+    let cleanEmail = email.trim();
+    if (cleanEmail.includes("(")) {
+      cleanEmail = cleanEmail.split("(")[0].trim();
+    }
+    const cleanPassword = password.trim();
+
     try {
       if (isLogin) {
         const res = await fetch(Config.apiLogin, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), password: password.trim(), role }),
+          body: JSON.stringify({ email: cleanEmail, password: cleanPassword, role }),
         });
         const data = await res.json();
 
@@ -374,15 +380,25 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
 
             {/* Admin Login Credential Hint */}
             {isLogin && role === "admin" && (
-              <View style={styles.adminCredHintBox}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <ShieldCheck size={15} color={Colors.primary} strokeWidth={2} />
-                  <Text style={styles.adminCredHintTitle}>Institutional Administration</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setEmail("admin@medsync.io");
+                  setPassword("Admin@123");
+                }}
+                activeOpacity={0.8}
+                style={styles.adminCredHintBox}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <ShieldCheck size={15} color={Colors.primary} strokeWidth={2} />
+                    <Text style={styles.adminCredHintTitle}>Institutional Administration</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: "600" }}>Tap to Auto-fill</Text>
                 </View>
                 <Text style={styles.credHintText}>
-                  Please sign in with your designated administrator credentials (admin@medsync.io).
+                  Tap here to auto-fill administrator credentials (admin@medsync.io / Admin@123).
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
 
             {/* Submit */}
