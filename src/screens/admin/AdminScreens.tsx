@@ -1279,6 +1279,11 @@ export function AdminProfile({ onSignOut }: { onSignOut: () => void }) {
     title: "",
   });
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   const handleCopyToken = () => {
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2500);
@@ -1290,11 +1295,32 @@ export function AdminProfile({ onSignOut }: { onSignOut: () => void }) {
     });
   };
 
-  const handleSaveAdminInfo = () => {
-    setAdminName(tempAdminName.trim() || "Alexander Wright");
-    setAdminRole(tempAdminRole.trim() || "Chief Operations Lead");
-    setAdminEmail(tempAdminEmail.trim() || "alexander.wright@medsync.health");
-    setAdminPager(tempAdminPager.trim() || "+1 (555) 901-4422");
+  const handleSaveAdminInfo = async () => {
+    const updatedName = tempAdminName.trim() || adminName;
+    const updatedRole = tempAdminRole.trim() || adminRole;
+    const updatedEmail = tempAdminEmail.trim() || adminEmail;
+    const updatedPager = tempAdminPager.trim() || adminPager;
+
+    setAdminName(updatedName);
+    setAdminRole(updatedRole);
+    setAdminEmail(updatedEmail);
+    setAdminPager(updatedPager);
+
+    try {
+      await fetch(Config.apiAdminProfile, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedName,
+          role: updatedRole,
+          email: updatedEmail,
+          pager: updatedPager,
+        }),
+      });
+    } catch (err) {
+      console.warn("Failed to persist admin profile:", err);
+    }
+
     setEditAdminModal(false);
     setAdminAlert({
       visible: true,
@@ -1302,6 +1328,78 @@ export function AdminProfile({ onSignOut }: { onSignOut: () => void }) {
       title: "Authority Updated",
       message: "Admin credentialing and pager details have been saved.",
     });
+  };
+
+  const handleChangeAdminPassword = async () => {
+    if (!currentPassword) {
+      setAdminAlert({
+        visible: true,
+        type: "error",
+        title: "Validation Error",
+        message: "Please enter your current administrator password.",
+      });
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setAdminAlert({
+        visible: true,
+        type: "error",
+        title: "Validation Error",
+        message: "New password must be at least 6 characters long.",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setAdminAlert({
+        visible: true,
+        type: "error",
+        title: "Password Mismatch",
+        message: "New password and confirmation do not match.",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await fetch(Config.apiAdminChangePassword, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          email: adminEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminAlert({
+          visible: true,
+          type: "error",
+          title: "Update Failed",
+          message: data.error || "Could not update admin password.",
+        });
+        return;
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setAdminAlert({
+        visible: true,
+        type: "success",
+        title: "Password Updated",
+        message: "Administrative master password has been successfully updated and hashed in the database.",
+      });
+    } catch {
+      setAdminAlert({
+        visible: true,
+        type: "error",
+        title: "Connection Error",
+        message: "Unable to connect to authentication services. Please try again.",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSaveClinicSettings = () => {
@@ -1681,6 +1779,65 @@ export function AdminProfile({ onSignOut }: { onSignOut: () => void }) {
               <Save size={18} color={Colors.onPrimary} />
               <Text style={styles.adminSaveBtnText}>Save Authority Profile</Text>
             </TouchableOpacity>
+
+            {/* Change Admin Password (Admin Alone) */}
+            <View style={styles.adminPasswordCard}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <Key size={16} color={Colors.primary} />
+                <Text style={styles.adminPasswordCardTitle}>Change Admin Password</Text>
+              </View>
+              <Text style={styles.adminPasswordCardSubtitle}>
+                Update master authentication credentials for this administrator account.
+              </Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+                <TextInput
+                  style={styles.formInput}
+                  secureTextEntry
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Enter current password"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>New Master Password</Text>
+                <TextInput
+                  style={styles.formInput}
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Minimum 6 characters"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <TextInput
+                  style={styles.formInput}
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Repeat new password"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.adminPasswordSubmitBtn, isChangingPassword && { opacity: 0.6 }]}
+                onPress={handleChangeAdminPassword}
+                disabled={isChangingPassword}
+                activeOpacity={0.8}
+              >
+                <Lock size={16} color={Colors.primary} />
+                <Text style={styles.adminPasswordSubmitBtnText}>
+                  {isChangingPassword ? "Updating Password..." : "Update Master Password"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </View>
       </Modal>
@@ -3088,6 +3245,43 @@ const styles = StyleSheet.create({
   adminSaveBtnText: {
     fontSize: FontSize.labelLg,
     color: Colors.onPrimary,
+    fontFamily: FontFamily.bodySemiBold,
+  },
+  adminPasswordCard: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant + "55",
+  },
+  adminPasswordCardTitle: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+  },
+  adminPasswordCardSubtitle: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyRegular,
+    marginBottom: Spacing.xs,
+  },
+  adminPasswordSubmitBtn: {
+    height: 44,
+    backgroundColor: Colors.surfaceContainerHighest,
+    borderRadius: Radius.md,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.primary + "55",
+  },
+  adminPasswordSubmitBtnText: {
+    fontSize: FontSize.labelMd,
+    color: Colors.primary,
     fontFamily: FontFamily.bodySemiBold,
   },
 

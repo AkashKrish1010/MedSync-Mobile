@@ -170,11 +170,33 @@ export default function DoctorProfile({ onSignOut, doctorProfile }: DoctorProfil
     }
   };
 
-  const handleSaveDocProfile = () => {
-    setDocName(tempName.trim() || "Dr. Taylor Reynolds");
-    setSpecialty(tempSpecialty.trim() || "Cardiology & Electrophysiology");
-    setHospital(tempHospital.trim() || "MedSync Heart Center");
-    setOfficePhone(tempPhone.trim());
+  const handleSaveDocProfile = async () => {
+    const updatedName = tempName.trim() || docName;
+    const updatedSpecialty = tempSpecialty.trim() || specialty;
+    const updatedHospital = tempHospital.trim() || hospital;
+    const updatedPhone = tempPhone.trim();
+
+    setDocName(updatedName);
+    setSpecialty(updatedSpecialty);
+    setHospital(updatedHospital);
+    setOfficePhone(updatedPhone);
+
+    const targetId = doctorId || doctorProfile?.id || "doc-001";
+    try {
+      await fetch(Config.apiDoctorProfile(targetId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedName,
+          specialty: updatedSpecialty,
+          hospital: updatedHospital,
+          officePhone: updatedPhone,
+        }),
+      });
+    } catch (err) {
+      console.warn("Failed to persist doctor profile update:", err);
+    }
+
     setEditDocModal(false);
     setDocAlert({
       visible: true,

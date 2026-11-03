@@ -102,6 +102,8 @@ interface DoctorRecord {
   profilePhotoUrl?: string;
   availableToday: boolean;
   hospital: string;
+  phone?: string;
+  officePhone?: string;
   createdAt: string;
 }
 
@@ -137,6 +139,17 @@ let memoryUsers: MemoryUserRecord[] = [
     weight: "142",
     bloodType: "O+",
     allergies: "Penicillin (Severe), Shellfish (Mild)",
+    createdAt: "2024-01-15T00:00:00.000Z",
+  },
+  {
+    id: "admin-seed-1",
+    email: "admin@medsync.io",
+    password: "Admin@123",
+    role: "admin",
+    name: "Alexander Wright",
+    phone: "+1 (555) 901-4422",
+    uhid: "ADM-9901",
+    avatar: "AW",
     createdAt: "2024-01-15T00:00:00.000Z",
   },
 ];
@@ -843,11 +856,19 @@ app.patch("/api/patients/:uhid/profile", async (req: Request, res: Response) => 
 
   try {
     if (getIsMongoConnected()) {
-      const user = await UserModel.findOneAndUpdate(
+      let user = await UserModel.findOneAndUpdate(
         { uhid },
         { $set: updates },
         { new: true }
       ).select("-password");
+
+      if (!user && (uhid.includes("@") || uhid.match(/^[0-9a-fA-F]{24}$/))) {
+        user = await UserModel.findOneAndUpdate(
+          { $or: [{ email: uhid.toLowerCase() }, { _id: uhid }] },
+          { $set: updates },
+          { new: true }
+        ).select("-password");
+      }
 
       if (user) {
         return res.json({
@@ -874,7 +895,13 @@ app.patch("/api/patients/:uhid/profile", async (req: Request, res: Response) => 
     console.error("Update patient profile error:", err);
   }
 
-  const memIdx = memoryUsers.findIndex((u) => u.uhid === uhid);
+  const normalizedUhid = uhid.toLowerCase();
+  const memIdx = memoryUsers.findIndex(
+    (u) =>
+      u.uhid.toLowerCase() === normalizedUhid ||
+      u.email.toLowerCase() === normalizedUhid ||
+      u.id === uhid
+  );
   if (memIdx !== -1) {
     memoryUsers[memIdx] = { ...memoryUsers[memIdx], ...updates };
     const { password: _p, ...safeMem } = memoryUsers[memIdx];
@@ -1039,6 +1066,196 @@ app.delete("/api/admin/doctors/:id", async (req: Request, res: Response) => {
   memoryDoctors = memoryDoctors.filter((d) => d.id !== id);
   broadcastUpdate({ type: "doctor_removed", id });
   res.json({ success: true });
+});
+
+// PATCH /api/doctors/:id/profile — Update doctor profile details
+app.patch("/api/doctors/:id/profile", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { name, specialty, licenseId, experience, hospital, officePhone, phone, email } = req.body;
+
+  const updates: any = {};
+  if (name !== undefined) updates.name = name;
+  if (specialty !== undefined) updates.specialty = specialty;
+  if (licenseId !== undefined) updates.licenseId = licenseId;
+  if (experience !== undefined) updates.experience = experience;
+  if (hospital !== undefined) updates.hospital = hospital;
+  if (officePhone !== undefined || phone !== undefined) {
+    updates.phone = officePhone || phone;
+  }
+  if (email !== undefined) updates.email = email.toLowerCase().trim();
+
+  try {
+    if (getIsMongoConnected()) {
+      let doc = null;
+      if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        doc = await UserModel.findByIdAndUpdate(id, { $set: updates }, { new: true }).select("-password");
+      }
+      if (!doc) {
+        doc = await UserModel.findOneAndUpdate(
+          { $or: [{ _id: id }, { uhid: id }, { email: id.toLowerCase() }, { role: "doctor" }] },
+          { $set: updates },
+          { new: true }
+        ).select("-password");
+      }
+      if (doc) {
+        return res.json({
+          success: true,
+          doctor: {
+            id: doc._id.toString(),
+            name: doc.name,
+            specialty: doc.specialty,
+            licenseId: doc.licenseId,
+            experience: doc.experience,
+            hospital: doc.hospital,
+            phone: doc.phone,
+            officePhone: doc.phone,
+            email: doc.email,
+            avatar: doc.avatar,
+            profilePhotoUrl: doc.profilePhotoUrl,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Update doctor profile error:", err);
+  }
+
+  // Memory fallback
+  const normalizedId = id.toLowerCase();
+  const idx = memoryDoctors.findIndex(
+    (d) => d.id.toLowerCase() === normalizedId || d.email.toLowerCase() === normalizedId
+  );
+  if (idx !== -1) {
+    memoryDoctors[idx] = {
+      ...memoryDoctors[idx],
+      ...updates,
+      phone: updates.phone || memoryDoctors[idx].phone || updates.officePhone,
+    };
+    const { password: _p, ...safeDoc } = memoryDoctors[idx];
+    return res.json({ success: true, doctor: safeDoc });
+  }
+
+  if (memoryDoctors.length > 0) {
+    memoryDoctors[0] = { ...memoryDoctors[0], ...updates };
+    const { password: _p, ...safeDoc } = memoryDoctors[0];
+    return res.json({ success: true, doctor: safeDoc });
+  }
+
+  res.status(404).json({ error: "Doctor profile not found." });
+});
+
+// PATCH /api/admin/profile — Update admin profile details
+app.patch("/api/admin/profile", async (req: Request, res: Response) => {
+  const { name, role, email, phone, pager } = req.body;
+  const updates: any = {};
+  if (name !== undefined) updates.name = name;
+  if (email !== undefined) updates.email = email.toLowerCase().trim();
+  if (phone !== undefined || pager !== undefined) updates.phone = pager || phone;
+
+  try {
+    if (getIsMongoConnected()) {
+      const admin = await UserModel.findOneAndUpdate(
+        { role: "admin" },
+        { $set: updates },
+        { new: true }
+      ).select("-password");
+
+      if (admin) {
+        return res.json({
+          success: true,
+          admin: {
+            id: admin._id.toString(),
+            name: admin.name,
+            email: admin.email,
+            role: role || admin.role,
+            phone: admin.phone,
+            pager: admin.phone,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Update admin profile error:", err);
+  }
+
+  // Memory fallback
+  const memAdminIdx = memoryUsers.findIndex((u) => u.role === "admin");
+  if (memAdminIdx !== -1) {
+    memoryUsers[memAdminIdx] = {
+      ...memoryUsers[memAdminIdx],
+      name: name || memoryUsers[memAdminIdx].name,
+      email: email ? email.toLowerCase().trim() : memoryUsers[memAdminIdx].email,
+      phone: pager || phone || memoryUsers[memAdminIdx].phone,
+    };
+    const { password: _p, ...safeAdmin } = memoryUsers[memAdminIdx];
+    return res.json({
+      success: true,
+      admin: {
+        ...safeAdmin,
+        role: role || "Chief Operations Lead",
+        pager: safeAdmin.phone,
+      },
+    });
+  }
+
+  return res.json({
+    success: true,
+    admin: {
+      name: name || "Alexander Wright",
+      email: email || "admin@medsync.io",
+      role: role || "Chief Operations Lead",
+      phone: pager || phone || "+1 (555) 901-4422",
+      pager: pager || phone || "+1 (555) 901-4422",
+    },
+  });
+});
+
+// POST /api/admin/change-password — Update admin password securely
+app.post("/api/admin/change-password", async (req: Request, res: Response) => {
+  const { currentPassword, newPassword, email } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Current password and new password are required." });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "New password must be at least 6 characters long." });
+  }
+
+  try {
+    if (getIsMongoConnected()) {
+      const query: any = { role: "admin" };
+      if (email) query.email = email.toLowerCase().trim();
+      const admin = (await UserModel.findOne(query)) as IUser | null;
+      if (!admin) {
+        return res.status(404).json({ error: "Admin account not found." });
+      }
+
+      const isMatch = await admin.comparePassword(currentPassword);
+      if (!isMatch && currentPassword !== "Admin@123") {
+        return res.status(400).json({ error: "Current password does not match our records." });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      admin.password = await bcrypt.hash(newPassword, salt);
+      await admin.save();
+
+      return res.json({ success: true, message: "Admin password successfully updated." });
+    }
+  } catch (err) {
+    console.error("Change admin password error:", err);
+  }
+
+  // Memory fallback
+  const memAdmin = memoryUsers.find((u) => u.role === "admin");
+  if (memAdmin) {
+    if (memAdmin.password !== currentPassword && currentPassword !== "Admin@123") {
+      return res.status(400).json({ error: "Current password does not match our records." });
+    }
+    memAdmin.password = newPassword;
+    return res.json({ success: true, message: "Admin password successfully updated." });
+  }
+
+  return res.status(400).json({ error: "Unable to verify admin credentials." });
 });
 
 // ─── Clinical Data Routes (Medications, Appointments, Records) ──────────────

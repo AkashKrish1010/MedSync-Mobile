@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile-version",
+    "name": "MedSync",
     "slug": "medsync",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,7 +18,7 @@
     "android": {
       "package": "com.akashkrish10.medsync",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -33,6 +33,16 @@
         "projectId": "97b9533b-15ab-47b7-b723-438cdfee87c2"
       }
     },
-    "owner": "akashkrish10"
+    "owner": "akashkrish10",
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ]
+    ]
   }
 }

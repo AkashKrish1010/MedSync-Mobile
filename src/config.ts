@@ -48,11 +48,14 @@ export const Config = {
   apiAuthMe: `${BACKEND_URL}/api/auth/me`,
   apiDoctors: `${BACKEND_URL}/api/doctors`,
   apiDoctorPhoto: (id: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(id)}/photo`,
+  apiDoctorProfile: (id: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(id)}/profile`,
   apiDoctorSchedule: (doctorId: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(doctorId)}/schedule`,
   apiDoctorPatients: (doctorId: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(doctorId)}/patients`,
   apiAdminAddDoctor: `${BACKEND_URL}/api/admin/doctors`,
   apiAdminDeleteDoctor: (id: string) => `${BACKEND_URL}/api/admin/doctors/${id}`,
   apiAdminOverview: `${BACKEND_URL}/api/admin/overview`,
+  apiAdminProfile: `${BACKEND_URL}/api/admin/profile`,
+  apiAdminChangePassword: `${BACKEND_URL}/api/admin/change-password`,
   apiPatientMedications: (uhid: string) =>
     `${BACKEND_URL}/api/patients/${encodeURIComponent(uhid)}/medications`,
   apiPatientMedicationTaken: (uhid: string, medId: string) =>
