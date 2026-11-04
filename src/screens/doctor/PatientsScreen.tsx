@@ -79,11 +79,12 @@ export default function DoctorPatients({
     title: "",
   });
 
-  const [patients, setPatients] = useState<PatientRecord[]>(DOCTOR_PATIENT_REGISTRY);
-  const [loadingPatients, setLoadingPatients] = useState(true);
-
   const doctorId = doctorProfile?.id ?? "doc-001";
   const doctorName = doctorProfile?.name ?? "Dr. Taylor Reynolds";
+  const isDemoDoc = doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor");
+
+  const [patients, setPatients] = useState<PatientRecord[]>(isDemoDoc ? DOCTOR_PATIENT_REGISTRY : []);
+  const [loadingPatients, setLoadingPatients] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -92,8 +93,14 @@ export default function DoctorPatients({
       try {
         const res = await fetch(Config.apiDoctorPatients(doctorId));
         const data = await res.json();
-        if (isMounted && Array.isArray(data) && data.length > 0) {
-          setPatients(data);
+        if (isMounted && Array.isArray(data)) {
+          if (data.length > 0) {
+            setPatients(data);
+          } else if (isDemoDoc) {
+            // Keep demo registry for Dr. Taylor
+          } else {
+            setPatients([]);
+          }
         }
       } catch {
       } finally {
@@ -107,7 +114,7 @@ export default function DoctorPatients({
       isMounted = false;
       clearInterval(interval);
     };
-  }, [doctorId]);
+  }, [doctorId, isDemoDoc]);
 
   const filtered = patients.filter((p) =>
     (p.name + p.uhid + p.condition).toLowerCase().includes(search.toLowerCase())

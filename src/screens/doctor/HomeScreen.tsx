@@ -40,6 +40,7 @@ import type { AuthDoctorProfile } from "../AuthScreen";
 interface Appointment {
   id: string;
   name: string;
+  uhid?: string;
   age: number;
   time: string;
   type: "In-Clinic" | "Live Chat Consultation";
@@ -104,31 +105,45 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
 
   // Modals state
   const [rxModalOpen, setRxModalOpen] = useState(false);
-  const [rxPatient, setRxPatient] = useState("Sarah Jenkins (P-4821)");
+  const [rxPatient, setRxPatient] = useState(appointments.length > 0 ? `${appointments[0].name} (${appointments[0].uhid || "P-4821"})` : "");
   const [rxMedName, setRxMedName] = useState("Atorvastatin Calcium");
   const [rxDosage, setRxDosage] = useState("20 mg");
   const [rxInstructions, setRxInstructions] = useState("1 tablet orally at bedtime. 30-day supply, 2 refills.");
   const [rxSuccess, setRxSuccess] = useState(false);
 
   const [chatModalOpen, setChatModalOpen] = useState(false);
-  const [chatPatient, setChatPatient] = useState("Sarah Jenkins");
+  const [chatPatient, setChatPatient] = useState(appointments.length > 0 ? appointments[0].name : "");
 
   const [labsModalOpen, setLabsModalOpen] = useState(false);
   const [selectedLabPanels, setSelectedLabPanels] = useState<string[]>(["Complete Blood Count (CBC)", "Lipid Panel"]);
   const [labSuccess, setLabSuccess] = useState(false);
 
   const [notesModalOpen, setNotesModalOpen] = useState(false);
-  const [soapNote, setSoapNote] = useState("Subjective: Patient reports good medication adherence. No myalgias or fatigue.\nObjective: BP 118/76 mmHg, HR 72 bpm regular.\nAssessment: Hyperlipidemia, stable on statin therapy.\nPlan: Re-check lipid panel in 6 months.");
+  const [soapNote, setSoapNote] = useState("Subjective: Patient reports good medication adherence. No myalgias or fatigue.\nObjective: BP 118/76 mmHg, HR 72 bpm regular.\nAssessment: Clinical status stable.\nPlan: Routine follow-up scheduled.");
   const [notesSaved, setNotesSaved] = useState(false);
 
   const [activePatient, setActivePatient] = useState<Appointment | null>(null);
   const [chartModalOpen, setChartModalOpen] = useState(false);
 
+  // Dynamic stats derived from live appointments and doctor profile
+  const liveChatCount = appointments.filter((a) => a.type === "Live Chat Consultation").length;
+  const activePatientCount = new Set(appointments.map((a) => a.uhid || a.name)).size;
+
+  // Rating: if no bookings and no baseline rating, "New". Once booked, baseline 5.0 (or doctorProfile rating).
+  let displayedRating = "New";
+  if (doctorProfile?.rating && doctorProfile.rating > 0) {
+    displayedRating = doctorProfile.rating.toFixed(1);
+  } else if (activePatientCount > 0) {
+    displayedRating = "5.0";
+  } else if (isDemoDoc) {
+    displayedRating = "4.9";
+  }
+
   const stats = [
     { label: "Today's Visits", value: String(appointments.length), color: Colors.primary, icon: Calendar },
-    { label: "Live Chats", value: "1", color: Colors.secondary, icon: MessageSquare },
-    { label: "Active Patients", value: "2", color: Colors.secondary, icon: Users },
-    { label: "Physician Rating", value: "4.9", color: Colors.tertiary, icon: Star },
+    { label: "Live Chats", value: String(liveChatCount), color: Colors.secondary, icon: MessageSquare },
+    { label: "Active Patients", value: String(activePatientCount), color: Colors.secondary, icon: Users },
+    { label: "Physician Rating", value: displayedRating, color: Colors.tertiary, icon: Star },
   ];
 
   const handleStartConsultation = (appt: Appointment) => {
@@ -152,11 +167,25 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
       {/* Greeting */}
       <View style={styles.greetingRow}>
         <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>TR</Text>
+          <Text style={styles.avatarText}>
+            {doctorProfile?.avatar ||
+              doctorName
+                .split(" ")
+                .filter(Boolean)
+                .map((w) => w[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2) ||
+              "DR"}
+          </Text>
         </View>
         <View>
-          <Text style={styles.greeting}>{getTimeOfDayGreeting()}, {doctorName.startsWith("Dr.") ? doctorName : "Dr. " + doctorName}</Text>
-          <Text style={styles.subtitle}>Cardiology · MED-CA-984210</Text>
+          <Text style={styles.greeting}>
+            {getTimeOfDayGreeting()}, {doctorName.startsWith("Dr.") ? doctorName : "Dr. " + doctorName}
+          </Text>
+          <Text style={styles.subtitle}>
+            {doctorProfile?.specialty || "General Specialist"} · {doctorProfile?.licenseId || "MED-VERIFIED"}
+          </Text>
         </View>
       </View>
 
@@ -181,7 +210,19 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
       <View style={styles.actionsRow}>
         <TouchableOpacity
           style={styles.actionBtn}
-          onPress={() => { setRxSuccess(false); setRxModalOpen(true); }}
+          onPress={() => {
+            if (appointments.length === 0) {
+              setDocAlert({
+                visible: true,
+                type: "info",
+                title: "Prescribing Station",
+                message: "No patients have booked appointments with you yet. Once a patient books, you can write digital prescriptions directly for them.",
+              });
+              return;
+            }
+            setRxSuccess(false);
+            setRxModalOpen(true);
+          }}
         >
           <View style={[styles.actionIconBox, { backgroundColor: Colors.primaryFixed + "44" }]}>
             <FileSignature size={20} color={Colors.primary} />
@@ -191,7 +232,19 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
 
         <TouchableOpacity
           style={styles.actionBtn}
-          onPress={() => { setLabSuccess(false); setLabsModalOpen(true); }}
+          onPress={() => {
+            if (appointments.length === 0) {
+              setDocAlert({
+                visible: true,
+                type: "info",
+                title: "Diagnostic Requisitions",
+                message: "No active patients to order labs for. Patient requisitions will become available as patients schedule consultations.",
+              });
+              return;
+            }
+            setLabSuccess(false);
+            setLabsModalOpen(true);
+          }}
         >
           <View style={[styles.actionIconBox, { backgroundColor: Colors.secondaryContainer + "55" }]}>
             <FlaskConical size={20} color={Colors.secondary} />
@@ -201,7 +254,23 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
 
         <TouchableOpacity
           style={styles.actionBtn}
-          onPress={() => setChatModalOpen(true)}
+          onPress={() => {
+            const firstChatAppt = appointments.find((a) => a.type === "Live Chat Consultation");
+            if (firstChatAppt) {
+              setChatPatient(firstChatAppt.name);
+              setChatModalOpen(true);
+            } else if (appointments.length > 0) {
+              setChatPatient(appointments[0].name);
+              setChatModalOpen(true);
+            } else {
+              setDocAlert({
+                visible: true,
+                type: "info",
+                title: "No Active Live Chats",
+                message: "No patient has booked a consultation with you yet. As soon as a patient books an appointment, you can chat with them live here.",
+              });
+            }
+          }}
         >
           <View style={[styles.actionIconBox, { backgroundColor: Colors.tertiaryContainer + "55" }]}>
             <MessageSquare size={20} color={Colors.tertiary} />

@@ -635,8 +635,8 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
         experience: experience || "5 Years",
         email: normalizedEmail,
         password: hashedPassword,
-        rating: 5.0,
-        reviewsCount: 1,
+        rating: 0,
+        reviewsCount: 0,
         avatar: safeUser.avatar,
         availableToday: true,
         hospital: hospital || "MedSync Clinic",
@@ -939,8 +939,8 @@ app.get("/api/doctors", async (_req: Request, res: Response) => {
         licenseId: d.licenseId,
         experience: d.experience,
         email: d.email,
-        rating: d.rating || 4.9,
-        reviewsCount: d.reviewsCount || 100,
+        rating: typeof d.rating === "number" ? d.rating : 0,
+        reviewsCount: typeof d.reviewsCount === "number" ? d.reviewsCount : 0,
         avatar: d.avatar || "DR",
         profilePhotoUrl: d.profilePhotoUrl,
         availableToday: d.availableToday ?? true,
@@ -984,8 +984,8 @@ app.post("/api/admin/doctors", async (req: Request, res: Response) => {
         experience: experience || "5 Years",
         hospital: hospital || "MedSync Clinic",
         avatar,
-        rating: 5.0,
-        reviewsCount: 1,
+        rating: 0,
+        reviewsCount: 0,
         availableToday: true,
         uhid: docUhid,
       });
@@ -999,8 +999,8 @@ app.post("/api/admin/doctors", async (req: Request, res: Response) => {
         experience: newDoc.experience || experience || "5 Years",
         email: normalizedEmail,
         password,
-        rating: 5.0,
-        reviewsCount: 1,
+        rating: 0,
+        reviewsCount: 0,
         avatar,
         availableToday: true,
         hospital: newDoc.hospital || hospital || "MedSync Clinic",
@@ -1034,8 +1034,8 @@ app.post("/api/admin/doctors", async (req: Request, res: Response) => {
     experience: experience || "N/A",
     email: normalizedEmail,
     password,
-    rating: 5.0,
-    reviewsCount: 1,
+    rating: 0,
+    reviewsCount: 0,
     avatar,
     availableToday: true,
     hospital: hospital || "MedSync Clinic",
@@ -1785,53 +1785,250 @@ app.get("/api/doctors/:doctorId/schedule", async (req: Request, res: Response) =
 });
 
 // GET /api/doctors/:doctorId/patients — Doctor's live patient registry
-app.get("/api/doctors/:doctorId/patients", async (_req: Request, res: Response) => {
-  try {
-    if (getIsMongoConnected()) {
-      const patients = await UserModel.find({ role: "patient" }).select("-password");
-      if (patients.length > 0) {
-        return res.json(
-          patients.map((p, idx) => ({
-            id: p._id.toString(),
-            name: p.name,
-            uhid: p.uhid,
-            age: 34 + (idx % 20),
-            status: idx === 0 ? "AI Flagged" : "Active",
-            lastVisit: "Sep 18",
-            condition: idx === 0 ? "Lipid Profile Abnormality" : "Hypertension follow-up",
-            allergies: idx === 0 ? "Penicillin (Moderate)" : "None Reported",
-            activeRx: idx === 0 ? "Atorvastatin 20mg, Metformin 500mg" : "Lisinopril 10mg",
-          }))
-        );
-      }
-    }
-  } catch {}
+app.get("/api/doctors/:doctorId/patients", async (req: Request, res: Response) => {
+  const { doctorId } = req.params;
+  const docIdentifiers: string[] = [doctorId];
+  const docNames: string[] = [];
 
-  // Fallback patient registry
-  res.json([
-    {
-      id: "1",
-      name: "Sarah Jenkins",
-      uhid: SEED_PATIENT_UHID,
-      age: 34,
-      status: "AI Flagged",
-      lastVisit: "Sep 18",
-      condition: "Lipid Profile Abnormality",
-      allergies: "Penicillin (Moderate)",
-      activeRx: "Atorvastatin 20mg, Metformin 500mg",
-    },
-    {
-      id: "2",
-      name: "Michael Torres",
-      uhid: "P-3302",
-      age: 52,
-      status: "Active",
-      lastVisit: "Sep 08",
-      condition: "Hypertension Stage 1",
-      allergies: "Sulfa Drugs",
-      activeRx: "Amlodipine 5mg",
-    },
-  ]);
+  const memDoc = memoryDoctors.find(
+    (d) =>
+      d.id === doctorId ||
+      d.uhid === doctorId ||
+      d.email.toLowerCase() === doctorId.toLowerCase() ||
+      d.name.toLowerCase() === doctorId.toLowerCase()
+  );
+  if (memDoc) {
+    docIdentifiers.push(memDoc.id);
+    if (memDoc.uhid) docIdentifiers.push(memDoc.uhid);
+    if (memDoc.email) docIdentifiers.push(memDoc.email);
+    docNames.push(memDoc.name);
+  }
+
+  if (getIsMongoConnected()) {
+    try {
+      const isHexId = Boolean(doctorId.match(/^[0-9a-fA-F]{24}$/));
+      const orList: any[] = [
+        { uhid: doctorId },
+        { email: doctorId.toLowerCase() },
+        { name: doctorId },
+      ];
+      if (isHexId) orList.unshift({ _id: doctorId });
+
+      const mongoDoc = await UserModel.findOne({
+        role: "doctor",
+        $or: orList,
+      });
+
+      if (mongoDoc) {
+        docIdentifiers.push(mongoDoc._id.toString());
+        if (mongoDoc.uhid) docIdentifiers.push(mongoDoc.uhid);
+        if (mongoDoc.email) docIdentifiers.push(mongoDoc.email);
+        if (mongoDoc.name) docNames.push(mongoDoc.name);
+      }
+    } catch {}
+  }
+
+  const uniqueIds = Array.from(new Set(docIdentifiers));
+  const uniqueNames = Array.from(new Set(docNames));
+
+  let doctorAppointments: any[] = [];
+  if (getIsMongoConnected()) {
+    try {
+      const orClauses: any[] = [
+        { doctorId: { $in: uniqueIds } },
+        { doctorName: { $in: uniqueNames } },
+      ];
+      uniqueNames.forEach((n) => {
+        const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        orClauses.push({ doctorName: new RegExp(escaped, "i") });
+      });
+
+      doctorAppointments = await AppointmentModel.find({
+        $or: orClauses,
+        status: { $ne: "Cancelled" },
+      }).sort({ createdAt: -1 });
+    } catch (err) {
+      console.error("Fetch doctor patients Mongo error:", err);
+    }
+  }
+
+  if (doctorAppointments.length === 0) {
+    doctorAppointments = memoryAppointments.filter((a) => {
+      if (a.status === "Cancelled" || a.category === "cancelled") return false;
+      const idMatch = uniqueIds.includes(a.doctorId);
+      const nameMatch = uniqueNames.some((n) =>
+        a.doctorName.toLowerCase().includes(n.toLowerCase())
+      );
+      return idMatch || nameMatch;
+    });
+  }
+
+  // If doctor has 0 appointments booked:
+  if (doctorAppointments.length === 0) {
+    const isLegacyDemo =
+      doctorId === "doc-001" ||
+      uniqueNames.some((n) => n.toLowerCase().includes("taylor")) ||
+      uniqueIds.some((id) => id.toLowerCase().includes("taylor"));
+    if (isLegacyDemo) {
+      return res.json([
+        {
+          id: "1",
+          name: "Sarah Jenkins",
+          uhid: SEED_PATIENT_UHID,
+          age: 34,
+          status: "AI Flagged",
+          lastVisit: "Sep 18",
+          condition: "Lipid Profile Abnormality",
+          allergies: "Penicillin (Moderate)",
+          activeRx: "Atorvastatin 20mg, Metformin 500mg",
+        },
+      ]);
+    }
+    // New doctor with no bookings has NO patients
+    return res.json([]);
+  }
+
+  // Group by distinct patient UHID
+  const patientMap = new Map<string, any>();
+  for (const appt of doctorAppointments) {
+    const uhid = appt.patientUhid || "P-4821";
+    if (!patientMap.has(uhid)) {
+      patientMap.set(uhid, {
+        id: appt._id ? appt._id.toString() : `pat-${uhid}`,
+        name: appt.patientName || "Patient",
+        uhid,
+        age: appt.patientAge || 34,
+        status: appt.status === "Flagged" ? "AI Flagged" : "Active",
+        lastVisit: appt.date || "Recent",
+        condition: appt.complaint || "Clinical review",
+        allergies: "None Reported",
+        activeRx: "Standard Care Regimen",
+      });
+    }
+  }
+
+  // Enrich with user profile data if available
+  if (getIsMongoConnected()) {
+    try {
+      const uhidList = Array.from(patientMap.keys());
+      const users = await UserModel.find({ uhid: { $in: uhidList } });
+      for (const u of users) {
+        if (patientMap.has(u.uhid)) {
+          const existing = patientMap.get(u.uhid);
+          existing.name = u.name || existing.name;
+          if (u.allergies) existing.allergies = u.allergies;
+          if (u.bloodType) existing.bloodType = u.bloodType;
+        }
+      }
+    } catch {}
+  }
+
+  return res.json(Array.from(patientMap.values()));
+});
+
+// GET /api/doctors/:doctorId/stats — Doctor's live statistics & metrics
+app.get("/api/doctors/:doctorId/stats", async (req: Request, res: Response) => {
+  const { doctorId } = req.params;
+  const docIdentifiers: string[] = [doctorId];
+  const docNames: string[] = [];
+
+  const memDoc = memoryDoctors.find(
+    (d) =>
+      d.id === doctorId ||
+      d.uhid === doctorId ||
+      d.email.toLowerCase() === doctorId.toLowerCase() ||
+      d.name.toLowerCase() === doctorId.toLowerCase()
+  );
+  if (memDoc) {
+    docIdentifiers.push(memDoc.id);
+    if (memDoc.uhid) docIdentifiers.push(memDoc.uhid);
+    if (memDoc.email) docIdentifiers.push(memDoc.email);
+    docNames.push(memDoc.name);
+  }
+
+  let doctorRating = 0;
+  let doctorReviews = 0;
+  let doctorExperience = "General Medicine";
+
+  if (getIsMongoConnected()) {
+    try {
+      const isHexId = Boolean(doctorId.match(/^[0-9a-fA-F]{24}$/));
+      const orList: any[] = [
+        { uhid: doctorId },
+        { email: doctorId.toLowerCase() },
+        { name: doctorId },
+      ];
+      if (isHexId) orList.unshift({ _id: doctorId });
+
+      const mongoDoc = await UserModel.findOne({
+        role: "doctor",
+        $or: orList,
+      });
+
+      if (mongoDoc) {
+        docIdentifiers.push(mongoDoc._id.toString());
+        if (mongoDoc.uhid) docIdentifiers.push(mongoDoc.uhid);
+        if (mongoDoc.email) docIdentifiers.push(mongoDoc.email);
+        if (mongoDoc.name) docNames.push(mongoDoc.name);
+        doctorRating = typeof mongoDoc.rating === "number" ? mongoDoc.rating : 0;
+        doctorReviews = typeof mongoDoc.reviewsCount === "number" ? mongoDoc.reviewsCount : 0;
+        doctorExperience = mongoDoc.experience || doctorExperience;
+      }
+    } catch {}
+  }
+
+  const uniqueIds = Array.from(new Set(docIdentifiers));
+  const uniqueNames = Array.from(new Set(docNames));
+
+  let doctorAppointments: any[] = [];
+  if (getIsMongoConnected()) {
+    try {
+      const orClauses: any[] = [
+        { doctorId: { $in: uniqueIds } },
+        { doctorName: { $in: uniqueNames } },
+      ];
+      uniqueNames.forEach((n) => {
+        const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        orClauses.push({ doctorName: new RegExp(escaped, "i") });
+      });
+
+      doctorAppointments = await AppointmentModel.find({
+        $or: orClauses,
+        status: { $ne: "Cancelled" },
+      });
+    } catch {}
+  }
+
+  if (doctorAppointments.length === 0) {
+    doctorAppointments = memoryAppointments.filter((a) => {
+      if (a.status === "Cancelled" || a.category === "cancelled") return false;
+      const idMatch = uniqueIds.includes(a.doctorId);
+      const nameMatch = uniqueNames.some((n) =>
+        a.doctorName.toLowerCase().includes(n.toLowerCase())
+      );
+      return idMatch || nameMatch;
+    });
+  }
+
+  const todayVisits = doctorAppointments.length;
+  const liveChats = doctorAppointments.filter((a) => a.type === "Live Chat Consultation").length;
+  const uniquePatients = new Set(doctorAppointments.map((a) => a.patientUhid || a.patientName)).size;
+
+  let effectiveRating: number | string = doctorRating;
+  if (effectiveRating === 0 && uniquePatients > 0) {
+    effectiveRating = 5.0; // Starts 5-star baseline on first patient booking
+    doctorReviews = uniquePatients;
+  }
+
+  res.json({
+    todayVisits,
+    liveChats,
+    activePatients: uniquePatients,
+    rating: effectiveRating > 0 ? effectiveRating : "New",
+    ratingNumeric: typeof effectiveRating === "number" ? effectiveRating : 0,
+    reviewsCount: doctorReviews,
+    experience: doctorExperience,
+  });
 });
 
 // GET /api/patients/:uhid/records — Live medical records & lab reports

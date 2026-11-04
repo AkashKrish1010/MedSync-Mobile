@@ -464,11 +464,16 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
               />
               <Text style={styles.doctorCardName} numberOfLines={1}>{doc.name}</Text>
               <Text style={styles.doctorCardSpecialty} numberOfLines={1}>{doc.specialty}</Text>
-              {doc.rating > 0 && (
+              {doc.rating > 0 ? (
                 <View style={styles.ratingRow}>
                   <Star size={11} color={Colors.primary} fill={Colors.primary} />
                   <Text style={styles.ratingText}>{doc.rating.toFixed(1)}</Text>
                   <Text style={styles.reviewCount}>({doc.reviewsCount})</Text>
+                </View>
+              ) : (
+                <View style={styles.ratingRow}>
+                  <Star size={11} color={Colors.outline} />
+                  <Text style={[styles.reviewCount, { color: Colors.primary, fontFamily: FontFamily.bodySemiBold }]}>New</Text>
                 </View>
               )}
               <Text style={styles.hospitalName} numberOfLines={1}>{doc.hospital}</Text>

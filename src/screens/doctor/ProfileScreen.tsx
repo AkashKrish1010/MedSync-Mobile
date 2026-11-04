@@ -85,10 +85,45 @@ export default function DoctorProfile({ onSignOut, doctorProfile }: DoctorProfil
     title: "",
   });
 
+  const isDemoDoc = doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor");
+  const [patientCount, setPatientCount] = useState(isDemoDoc ? 124 : 0);
+  const [doctorRatingVal, setDoctorRatingVal] = useState<string | number>(isDemoDoc ? "4.9" : "New");
+  const [reviewsCount, setReviewsCount] = useState(isDemoDoc ? 248 : 0);
+
+  useEffect(() => {
+    if (!doctorId) return;
+    let isMounted = true;
+    fetch(Config.apiDoctorStats(doctorId))
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (typeof data.activePatients === "number") {
+          setPatientCount(data.activePatients);
+        }
+        if (data.rating) {
+          setDoctorRatingVal(data.rating);
+        }
+        if (typeof data.reviewsCount === "number") {
+          setReviewsCount(data.reviewsCount);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [doctorId]);
+
   const stats = [
-    { label: "Patients", value: "124", id: "patients_stat" },
-    { label: "Rating", value: "4.9 / 5", id: "rating_stat" },
-    { label: "Experience", value: "12 Years", id: "experience_stat" },
+    { label: "Patients", value: String(patientCount), id: "patients_stat" },
+    {
+      label: "Rating",
+      value:
+        doctorRatingVal === "New" || doctorRatingVal === 0
+          ? "New"
+          : `${typeof doctorRatingVal === "number" ? doctorRatingVal.toFixed(1) : doctorRatingVal} / 5`,
+      id: "rating_stat",
+    },
+    { label: "Experience", value: doctorProfile?.experience || "5 Years", id: "experience_stat" },
   ];
 
   const menuItems = [
@@ -389,28 +424,40 @@ export default function DoctorProfile({ onSignOut, doctorProfile }: DoctorProfil
             <View style={styles.infoCard}>
               <Star size={24} color={Colors.secondary} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.infoCardTitle}>Overall Clinical Rating: 4.9 / 5.0</Text>
-                <Text style={styles.infoCardDesc}>Based on 248 verified post-consultation patient evaluations.</Text>
+                <Text style={styles.infoCardTitle}>
+                  {doctorRatingVal === "New" || patientCount === 0
+                    ? "Overall Clinical Rating: New Physician"
+                    : `Overall Clinical Rating: ${typeof doctorRatingVal === "number" ? doctorRatingVal.toFixed(1) : doctorRatingVal} / 5.0`}
+                </Text>
+                <Text style={styles.infoCardDesc}>
+                  {patientCount === 0
+                    ? "No patient evaluations recorded yet. Ratings will populate automatically as patients schedule and complete consultations with you."
+                    : `Based on ${reviewsCount || patientCount} verified post-consultation patient evaluations.`}
+                </Text>
               </View>
             </View>
-            <Text style={styles.sectionLabel}>VERIFIED PATIENT COMMENTS</Text>
-            {[
-              { patient: "Sarah J.", rating: 5, date: "Sep 14, 2026", comment: "Dr. Reynolds was exceptionally thorough explaining my ECG results and answering all questions." },
-              { patient: "Robert K.", rating: 5, date: "Sep 08, 2026", comment: "Prompt, attentive, and very reassuring bedside manner during my telehealth session." },
-              { patient: "Anika P.", rating: 5, date: "Aug 22, 2026", comment: "Great clinical follow-up. The medication adjustment made a noticeable difference." },
-            ].map((r, idx) => (
-              <View key={idx} style={styles.commentCard}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={styles.commentAuthor}>{r.patient} · {r.date}</Text>
-                  <View style={{ flexDirection: "row", gap: 2 }}>
-                    {[...Array(r.rating)].map((_, i) => (
-                      <Star key={i} size={13} color={Colors.secondary} fill={Colors.secondary} />
-                    ))}
+            {patientCount > 0 && isDemoDoc ? (
+              <>
+                <Text style={styles.sectionLabel}>VERIFIED PATIENT COMMENTS</Text>
+                {[
+                  { patient: "Sarah J.", rating: 5, date: "Sep 14, 2026", comment: "Exceptionally thorough explaining diagnostic results and answering all clinical questions." },
+                  { patient: "Robert K.", rating: 5, date: "Sep 08, 2026", comment: "Prompt, attentive, and very reassuring bedside manner during my telehealth session." },
+                  { patient: "Anika P.", rating: 5, date: "Aug 22, 2026", comment: "Great clinical follow-up. The medication adjustment made a noticeable difference." },
+                ].map((r, idx) => (
+                  <View key={idx} style={styles.commentCard}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={styles.commentAuthor}>{r.patient} · {r.date}</Text>
+                      <View style={{ flexDirection: "row", gap: 2 }}>
+                        {[...Array(r.rating)].map((_, i) => (
+                          <Star key={i} size={13} color={Colors.secondary} fill={Colors.secondary} />
+                        ))}
+                      </View>
+                    </View>
+                    <Text style={styles.commentText}>"{r.comment}"</Text>
                   </View>
-                </View>
-                <Text style={styles.commentText}>"{r.comment}"</Text>
-              </View>
-            ))}
+                ))}
+              </>
+            ) : null}
           </ScrollView>
         </View>
       </Modal>

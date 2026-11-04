@@ -51,6 +51,7 @@ export const Config = {
   apiDoctorProfile: (id: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(id)}/profile`,
   apiDoctorSchedule: (doctorId: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(doctorId)}/schedule`,
   apiDoctorPatients: (doctorId: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(doctorId)}/patients`,
+  apiDoctorStats: (doctorId: string) => `${BACKEND_URL}/api/doctors/${encodeURIComponent(doctorId)}/stats`,
   apiAdminAddDoctor: `${BACKEND_URL}/api/admin/doctors`,
   apiAdminDeleteDoctor: (id: string) => `${BACKEND_URL}/api/admin/doctors/${id}`,
   apiAdminOverview: `${BACKEND_URL}/api/admin/overview`,
