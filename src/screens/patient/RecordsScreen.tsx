@@ -33,12 +33,14 @@ import {
   Clock,
   Compass,
   Check,
+  Camera,
 } from "lucide-react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Colors } from "../../theme/colors";
 import { Spacing, Radius, FontSize, FontFamily } from "../../theme/typography";
 import AIScanScreen from "../AIScanScreen";
+import PrescriptionScanModal from "../../components/PrescriptionScanModal";
 import ThemedAlertModal, { ThemedAlertButton } from "../../components/ThemedAlertModal";
 import { HEALTH_RECORDS } from "../../data/mockData";
 import { Config } from "../../config";
@@ -113,6 +115,7 @@ export default function PatientRecords({
   const isDemoAccount = patientProfile?.email ? patientProfile.email.toLowerCase().includes("sarah") : true;
 
   const [aiOpen, setAiOpen] = useState(false);
+  const [rxScanOpen, setRxScanOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [records, setRecords] = useState<HealthRecord[]>(isDemoAccount ? HEALTH_RECORDS : []);
   const [loadingRecords, setLoadingRecords] = useState(true);
@@ -423,6 +426,21 @@ export default function PatientRecords({
         <View style={{ flex: 1 }}>
           <Text style={styles.aiScanTitle}>AI Clinical Report Scanner</Text>
           <Text style={styles.aiScanSubtitle}>Upload or type lab data for instant clinical insights</Text>
+        </View>
+        <ArrowRight size={20} color={Colors.onPrimary} />
+      </TouchableOpacity>
+
+      {/* Prescription Pad (Rx) OCR Scanner Card */}
+      <TouchableOpacity
+        style={[styles.aiScanBtn, { backgroundColor: "#0284C7", marginTop: 8 }]}
+        onPress={() => setRxScanOpen(true)}
+      >
+        <View style={[styles.aiScanIconBox, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+          <Camera size={24} color={Colors.onPrimary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.aiScanTitle}>Prescription Pad (Rx) OCR</Text>
+          <Text style={styles.aiScanSubtitle}>Snap paper prescription to auto-populate daily medicines</Text>
         </View>
         <ArrowRight size={20} color={Colors.onPrimary} />
       </TouchableOpacity>
@@ -927,6 +945,13 @@ export default function PatientRecords({
           }}
         />
       </Modal>
+
+      {/* ─── Prescription Pad (Rx) OCR Scanner Modal ──────────────────────────── */}
+      <PrescriptionScanModal
+        visible={rxScanOpen}
+        onClose={() => setRxScanOpen(false)}
+        patientUhid={userUhid}
+      />
 
       {/* ─── Unified Themed Alert Dialog ─────────────────────────────────────── */}
       <ThemedAlertModal

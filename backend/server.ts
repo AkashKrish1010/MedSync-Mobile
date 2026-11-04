@@ -1310,18 +1310,22 @@ app.get("/api/patients/:uhid/medications", async (req: Request, res: Response) =
 app.post("/api/patients/:uhid/medications", async (req: Request, res: Response) => {
   const { uhid } = req.params;
   const { doctorId, doctorName, name, dosage, instructions, purpose, timeSlot } = req.body;
-  if (!doctorId || !name || !dosage) {
-    return res.status(400).json({ error: "doctorId, name, and dosage are required." });
+  if (!name) {
+    return res.status(400).json({ error: "Medication name is required." });
   }
+
+  const finalDoctorId = doctorId || "doc-rx-scan";
+  const finalDoctorName = doctorName || "Prescribing Physician";
+  const finalDosage = dosage || "Standard Dose";
 
   try {
     if (getIsMongoConnected()) {
       const med = await MedicationModel.create({
         patientUhid: uhid,
-        doctorId,
-        doctorName: doctorName || "Physician",
+        doctorId: finalDoctorId,
+        doctorName: finalDoctorName,
         name,
-        dosage,
+        dosage: finalDosage,
         instructions: instructions || "As directed",
         purpose: purpose || "Clinical therapy",
         timeSlot: timeSlot || "As prescribed",
@@ -1344,10 +1348,10 @@ app.post("/api/patients/:uhid/medications", async (req: Request, res: Response) 
   const newMed = {
     id: `med-${Date.now()}`,
     patientUhid: uhid,
-    doctorId,
-    doctorName: doctorName || "Physician",
+    doctorId: finalDoctorId,
+    doctorName: finalDoctorName,
     name,
-    dosage,
+    dosage: finalDosage,
     instructions: instructions || "As directed",
     purpose: purpose || "Clinical therapy",
     timeSlot: timeSlot || "As prescribed",
@@ -1357,6 +1361,68 @@ app.post("/api/patients/:uhid/medications", async (req: Request, res: Response) 
   memoryMedications.push(newMed);
   broadcastUpdate({ type: "medication_added", patientUhid: uhid, medication: newMed });
   res.status(201).json({ success: true, medication: newMed });
+});
+
+// POST /api/patients/:uhid/medications/batch — Bulk insert scanned medications
+app.post("/api/patients/:uhid/medications/batch", async (req: Request, res: Response) => {
+  const { uhid } = req.params;
+  const { medications = [], doctorName, doctorId } = req.body;
+
+  if (!Array.isArray(medications) || medications.length === 0) {
+    return res.status(400).json({ error: "medications array is required and must not be empty." });
+  }
+
+  const docId = doctorId || "doc-rx-scan";
+  const docName = doctorName || "Prescribing Physician";
+
+  const savedMeds: any[] = [];
+
+  try {
+    if (getIsMongoConnected()) {
+      for (const m of medications) {
+        if (!m.name) continue;
+        const med = await MedicationModel.create({
+          patientUhid: uhid,
+          doctorId: docId,
+          doctorName: m.doctorName || docName,
+          name: m.name,
+          dosage: m.dosage || "As prescribed",
+          instructions: m.instructions || "As directed",
+          purpose: m.purpose || "Prescribed Therapy",
+          timeSlot: m.timeSlot || "8:00 AM Breakfast",
+          taken: false,
+        });
+        savedMeds.push({ id: med._id.toString(), ...med.toObject() });
+      }
+      broadcastUpdate({ type: "medications_added", patientUhid: uhid, count: savedMeds.length });
+      return res.status(201).json({ success: true, count: savedMeds.length, medications: savedMeds });
+    }
+  } catch (err) {
+    console.error("Batch add medications Mongo error:", err);
+  }
+
+  // Memory fallback
+  for (const m of medications) {
+    if (!m.name) continue;
+    const newMed = {
+      id: `med-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      patientUhid: uhid,
+      doctorId: docId,
+      doctorName: m.doctorName || docName,
+      name: m.name,
+      dosage: m.dosage || "As prescribed",
+      instructions: m.instructions || "As directed",
+      purpose: m.purpose || "Prescribed Therapy",
+      timeSlot: m.timeSlot || "8:00 AM Breakfast",
+      taken: false,
+      createdAt: new Date().toISOString(),
+    };
+    memoryMedications.push(newMed);
+    savedMeds.push(newMed);
+  }
+
+  broadcastUpdate({ type: "medications_added", patientUhid: uhid, count: savedMeds.length });
+  res.status(201).json({ success: true, count: savedMeds.length, medications: savedMeds });
 });
 
 // PATCH /api/patients/:uhid/medications/:medId
@@ -2378,6 +2444,153 @@ Return valid JSON only.`,
   } catch (error: any) {
     console.error("File Analysis Error:", error);
     res.status(500).json({ error: "File analysis failed. Please try again." });
+  }
+});
+
+// POST /api/scan-prescription — OCR and semantic parsing of prescription pads & medication orders
+app.post("/api/scan-prescription", fileOrJsonUpload, async (req: Request, res: Response) => {
+  const file = req.file;
+  const patientUhid = (req.body?.patientUhid as string) || (req.query?.patientUhid as string);
+
+  let base64Data: string | null = null;
+  let rawMime: string = "";
+  let fileName: string = "uploaded_prescription";
+
+  if (file) {
+    base64Data = file.buffer.toString("base64");
+    rawMime = file.mimetype || "";
+    fileName = file.originalname || "uploaded_prescription";
+  } else if (req.body && req.body.base64) {
+    base64Data = req.body.base64;
+    rawMime = req.body.mimeType || "";
+    fileName = req.body.fileName || "uploaded_prescription";
+  }
+
+  if (!base64Data) {
+    return res.status(400).json({ error: "No prescription image uploaded. Please capture or upload a prescription." });
+  }
+
+  const isPdf = rawMime.includes("pdf") || fileName.toLowerCase().endsWith(".pdf");
+  const mime: "application/pdf" | "image/jpeg" | "image/png" | "image/webp" = isPdf
+    ? "application/pdf"
+    : rawMime.includes("png") || fileName.toLowerCase().endsWith(".png")
+    ? "image/png"
+    : rawMime.includes("webp") || fileName.toLowerCase().endsWith(".webp")
+    ? "image/webp"
+    : "image/jpeg";
+
+  // Fallback mock if no Gemini API Key
+  if (!hasApiKey()) {
+    const mockPrescription = {
+      isValid: true,
+      invalidReason: "",
+      doctorName: "Dr. Taylor Reynolds",
+      clinicHospital: "MedSync Cardiology & Internal Medicine",
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      diagnosis: "Post-consultation follow-up & lipid stabilization",
+      medications: [
+        {
+          name: "Atorvastatin Calcium",
+          dosage: "20 mg",
+          instructions: "1 tablet orally once daily at bedtime after meals",
+          timeSlot: "9:00 PM Bedtime",
+          purpose: "Cholesterol Regulation",
+          duration: "30 Days",
+        },
+        {
+          name: "Metformin HCl",
+          dosage: "500 mg",
+          instructions: "1 tablet orally twice daily with breakfast and dinner",
+          timeSlot: "8:00 AM Breakfast",
+          purpose: "Glycemic Stability",
+          duration: "30 Days",
+        },
+      ],
+      doctorNotes: "Continue low sodium intake, maintain regular morning walks, and re-check lipid panel in 6 weeks.",
+    };
+    return res.json(mockPrescription);
+  }
+
+  try {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: mime, data: base64Data } },
+            {
+              text: `You are the MedSync Clinical Prescription OCR Engine.
+Inspect this image of a doctor's prescription pad, hospital Rx slip, discharge medication sheet, or pharmacy bottle order.
+
+FIRST, determine if this image is a genuine medical prescription or medication document.
+If the image is unrelated (e.g. food/cooking, receipts, animals, landscape, clothing, meme, non-medical document):
+Return JSON:
+{
+  "isValid": false,
+  "invalidReason": "The scanned image does not appear to be a medical prescription pad or medication order. Please snap a clear photo of your doctor prescription.",
+  "doctorName": "",
+  "clinicHospital": "",
+  "date": "",
+  "diagnosis": "",
+  "medications": [],
+  "doctorNotes": ""
+}
+
+If it IS a prescription or contains medications:
+Extract the prescribing clinician, clinic name, date, and ALL prescribed medications.
+Decipher medical abbreviations and physician shorthand accurately:
+- QD / OD = Once daily
+- BD / BID = Twice daily
+- TDS / TID = Three times daily
+- QID = Four times daily
+- HS / QHS = At bedtime
+- AC = Before meals
+- PC = After meals
+- PRN / SOS = As needed / When required
+- PO = Orally
+- Stat = Immediately
+
+For timeSlot, map to one of:
+- "8:00 AM Breakfast" (for morning / breakfast / OD doses)
+- "1:00 PM Lunch" (for midday / lunch doses)
+- "6:00 PM Evening" (for evening doses)
+- "9:00 PM Bedtime" (for night / bedtime / HS doses)
+- "As Needed" (for PRN / SOS)
+
+Return strictly valid JSON with this exact schema (no markdown code fence wrapping, pure JSON):
+{
+  "isValid": true,
+  "invalidReason": "",
+  "doctorName": "Physician name if detected (e.g. Dr. Jane Smith), or 'Prescribing Physician'",
+  "clinicHospital": "Hospital or clinic name if detected, or 'Clinical Practice'",
+  "date": "Prescription date if found, or formatted today date",
+  "diagnosis": "Clinical indication or diagnosis if mentioned, or 'Prescribed Clinical Therapy'",
+  "medications": [
+    {
+      "name": "Drug name (e.g. Amoxicillin, Atorvastatin, Metformin)",
+      "dosage": "Strength (e.g. 500 mg, 20 mg, 1 puff)",
+      "instructions": "Clear patient-friendly instruction (e.g. 1 tablet orally twice daily after food)",
+      "timeSlot": "8:00 AM Breakfast|1:00 PM Lunch|6:00 PM Evening|9:00 PM Bedtime|As Needed",
+      "purpose": "Clinical condition or drug category (e.g. Antibiotic, Cholesterol, Hypertension)",
+      "duration": "Duration (e.g. 5 days, 30 days, Ongoing)"
+    }
+  ],
+  "doctorNotes": "Any clinical precautions or lifestyle advice written on the sheet"
+}`,
+            },
+          ],
+        },
+      ],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    return res.json(parsed);
+  } catch (error: any) {
+    console.error("Prescription Scan Error:", error);
+    res.status(500).json({ error: "Failed to scan prescription image. Please try again." });
   }
 });
 

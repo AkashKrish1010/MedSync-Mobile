@@ -57,8 +57,11 @@ export const Config = {
   apiAdminOverview: `${BACKEND_URL}/api/admin/overview`,
   apiAdminProfile: `${BACKEND_URL}/api/admin/profile`,
   apiAdminChangePassword: `${BACKEND_URL}/api/admin/change-password`,
+  apiScanPrescription: `${BACKEND_URL}/api/scan-prescription`,
   apiPatientMedications: (uhid: string) =>
     `${BACKEND_URL}/api/patients/${encodeURIComponent(uhid)}/medications`,
+  apiPatientMedicationsBatch: (uhid: string) =>
+    `${BACKEND_URL}/api/patients/${encodeURIComponent(uhid)}/medications/batch`,
   apiPatientMedicationTaken: (uhid: string, medId: string) =>
     `${BACKEND_URL}/api/patients/${encodeURIComponent(uhid)}/medications/${encodeURIComponent(medId)}`,
   apiPatientAppointments: (uhid: string) =>

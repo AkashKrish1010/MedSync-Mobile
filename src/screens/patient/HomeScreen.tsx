@@ -32,11 +32,13 @@ import {
   Building2,
   Sparkles,
   Trash2,
+  Camera,
 } from "lucide-react-native";
 import { Colors } from "../../theme/colors";
 import { Spacing, Radius, FontSize, FontFamily } from "../../theme/typography";
 import { Config } from "../../config";
 import AIScanScreen from "../AIScanScreen";
+import PrescriptionScanModal from "../../components/PrescriptionScanModal";
 import ConsultationChatModal from "../../components/ConsultationChatModal";
 import ThemedAlertModal from "../../components/ThemedAlertModal";
 import DoctorAvatar from "../../components/DoctorAvatar";
@@ -77,6 +79,7 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
   const [waterAmount, setWaterAmount] = useState(1.5);
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiModalType, setAiModalType] = useState<"report" | "symptom">("symptom");
+  const [rxScanOpen, setRxScanOpen] = useState(false);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [doctorsError, setDoctorsError] = useState(false);
@@ -354,7 +357,7 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
 
       {/* Active Medications & Care Plan (Replaced Vitals sensor block) */}
       <View style={styles.sectionHeaderRow}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>Prescribed Care Regimen</Text>
           <Text style={styles.sectionSubtitle}>
             {meds.length
@@ -362,6 +365,14 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
               : "Medicines from your doctor appear here"}
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.scanRxHeaderBtn}
+          onPress={() => setRxScanOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Camera size={13} color={Colors.primary} strokeWidth={2.4} />
+          <Text style={styles.scanRxHeaderBtnText}>Scan Rx</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Medication Adherence Progress */}
@@ -405,13 +416,13 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
       </View>
 
       {/* AI Health Tools */}
-      <Text style={styles.sectionTitle}>AI Health Assistant</Text>
+      <Text style={styles.sectionTitle}>AI Health Assistant & OCR</Text>
       <View style={styles.aiRow}>
         <TouchableOpacity
           onPress={() => { setAiModalType("symptom"); setAiModalOpen(true); }}
           style={[styles.aiBtn, { backgroundColor: Colors.primary }]}
         >
-          <Stethoscope size={24} color={Colors.onPrimary} strokeWidth={2.2} />
+          <Stethoscope size={22} color={Colors.onPrimary} strokeWidth={2.2} />
           <Text style={styles.aiBtnTitle}>Symptom Check</Text>
           <Text style={styles.aiBtnSubtitle}>Describe symptoms</Text>
         </TouchableOpacity>
@@ -419,9 +430,17 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
           onPress={() => { setAiModalType("report"); setAiModalOpen(true); }}
           style={[styles.aiBtn, { backgroundColor: Colors.tertiary }]}
         >
-          <FileText size={24} color={Colors.onPrimary} strokeWidth={2.2} />
+          <FileText size={22} color={Colors.onPrimary} strokeWidth={2.2} />
           <Text style={styles.aiBtnTitle}>Analyze Report</Text>
           <Text style={styles.aiBtnSubtitle}>Upload lab or PDF</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setRxScanOpen(true)}
+          style={[styles.aiBtn, { backgroundColor: "#0284C7" }]}
+        >
+          <Camera size={22} color={Colors.onPrimary} strokeWidth={2.2} />
+          <Text style={styles.aiBtnTitle}>Scan Rx Pad</Text>
+          <Text style={styles.aiBtnSubtitle}>Auto-populate meds</Text>
         </TouchableOpacity>
       </View>
 
@@ -529,6 +548,16 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
           }}
         />
       </Modal>
+
+      {/* Prescription Pad (Rx) OCR Scanner Modal */}
+      <PrescriptionScanModal
+        visible={rxScanOpen}
+        onClose={() => setRxScanOpen(false)}
+        patientUhid={userUhid}
+        onMedicationsAdded={() => {
+          refreshClinical();
+        }}
+      />
 
       {/* Appointment Booking Modal */}
       <Modal
@@ -828,6 +857,22 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.labelLg, color: Colors.onSurface, fontFamily: FontFamily.headlineSemiBold },
   sectionSubtitle: { fontSize: 11, color: Colors.onSurfaceVariant, fontFamily: FontFamily.bodyRegular },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.sm, marginBottom: 4 },
+  scanRxHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryFixed + "33",
+    borderWidth: 1,
+    borderColor: Colors.primary + "44",
+  },
+  scanRxHeaderBtnText: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontFamily: FontFamily.bodySemiBold,
+  },
   medProgressBar: { height: 6, backgroundColor: Colors.surfaceContainerHigh, borderRadius: 3, overflow: "hidden", marginVertical: 4 },
   medProgressFill: { height: "100%", backgroundColor: Colors.secondary, borderRadius: 3 },
   medCard: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.lg, padding: 12, borderWidth: 1, borderColor: Colors.outlineVariant, marginBottom: 2 },
