@@ -122,8 +122,12 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
 
   useFocusEffect(
     useCallback(() => {
+      fetchDoctors();
       refreshClinical();
-      const poll = setInterval(refreshClinical, 5000);
+      const poll = setInterval(() => {
+        refreshClinical();
+        fetchDoctors();
+      }, 5000);
       return () => clearInterval(poll);
     }, [refreshClinical])
   );
@@ -499,6 +503,7 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
       <Modal visible={aiModalOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setAiModalOpen(false)}>
         <AIScanScreen
           type={aiModalType}
+          patientUhid={userUhid}
           onClose={() => {
             setAiModalOpen(false);
             refreshClinical();

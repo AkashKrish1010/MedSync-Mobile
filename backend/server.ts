@@ -90,6 +90,7 @@ const chatRooms: Record<string, ChatMessage[]> = {
 // In-memory cache for fallback when MongoDB URI is pending
 interface DoctorRecord {
   id: string;
+  uhid?: string;
   name: string;
   specialty: string;
   licenseId: string;
@@ -989,6 +990,24 @@ app.post("/api/admin/doctors", async (req: Request, res: Response) => {
         uhid: docUhid,
       });
 
+      const newDoctorMem: DoctorRecord = {
+        id: newDoc._id.toString(),
+        uhid: docUhid,
+        name: newDoc.name,
+        specialty: newDoc.specialty || specialty,
+        licenseId: newDoc.licenseId || licenseId || "MED-PENDING",
+        experience: newDoc.experience || experience || "5 Years",
+        email: normalizedEmail,
+        password,
+        rating: 5.0,
+        reviewsCount: 1,
+        avatar,
+        availableToday: true,
+        hospital: newDoc.hospital || hospital || "MedSync Clinic",
+        createdAt: newDoc.createdAt.toISOString(),
+      };
+      memoryDoctors.push(newDoctorMem);
+
       broadcastUpdate({ type: "doctor_added", doctor: newDoc });
       return res.status(201).json({
         success: true,
@@ -1446,65 +1465,137 @@ app.get("/api/patients/:uhid/appointments/next", async (req: Request, res: Respo
 // POST /api/patients/:uhid/appointments — Book appointment with live persistence
 app.post("/api/patients/:uhid/appointments", async (req: Request, res: Response) => {
   const { uhid } = req.params;
-  const { doctorId, slotLabel, type = "Live Chat Consultation", patientName, patientAge, complaint } = req.body;
+  const {
+    doctorId,
+    slotLabel,
+    date: reqDate,
+    time: reqTime,
+    type = "Live Chat Consultation",
+    patientName: reqPatientName,
+    patientAge: reqPatientAge,
+    complaint,
+    doctorName: reqDoctorName,
+    specialty: reqSpecialty,
+  } = req.body;
 
-  if (!doctorId || !slotLabel) {
-    return res.status(400).json({ error: "doctorId and slotLabel are required." });
+  if (!doctorId) {
+    return res.status(400).json({ error: "doctorId is required." });
   }
 
-  let doctor = memoryDoctors.find((d) => d.id === doctorId);
-  if (!doctor && getIsMongoConnected()) {
+  // Derive final slot label, time, and date seamlessly
+  let time = reqTime || "10:00 AM";
+  let date = reqDate || "Today";
+  let finalSlotLabel = slotLabel;
+
+  if (slotLabel) {
+    const parts = slotLabel.trim().split(/\s+/);
+    if (!reqTime) time = parts.length >= 2 ? `${parts[parts.length - 2]} ${parts[parts.length - 1]}` : "10:00 AM";
+    if (!reqDate) date = parts.length >= 3 ? parts.slice(0, -2).join(" ") : slotLabel.split(" ")[0] || "Today";
+  } else {
+    finalSlotLabel = `${date} · ${time}`;
+  }
+
+  // Match doctor across memory and MongoDB using all identifier formats
+  let matchedDoc: any = memoryDoctors.find(
+    (d) =>
+      d.id === doctorId ||
+      d.uhid === doctorId ||
+      d.email.toLowerCase() === doctorId.toLowerCase() ||
+      d.name.toLowerCase() === doctorId.toLowerCase()
+  );
+
+  if (!matchedDoc && getIsMongoConnected()) {
     try {
-      const docUser = await UserModel.findById(doctorId);
+      const isHexId = doctorId.match(/^[0-9a-fA-F]{24}$/);
+      const orList: any[] = [
+        { uhid: doctorId },
+        { email: doctorId.toLowerCase() },
+        { name: doctorId },
+      ];
+      if (isHexId) orList.unshift({ _id: doctorId });
+
+      const docUser = await UserModel.findOne({
+        role: "doctor",
+        $or: orList,
+      });
+
       if (docUser) {
-        doctor = {
+        matchedDoc = {
           id: docUser._id.toString(),
+          uhid: docUser.uhid,
           name: docUser.name,
           specialty: docUser.specialty || "Specialist",
           licenseId: docUser.licenseId || "",
           experience: docUser.experience || "",
           email: docUser.email,
-          password: "",
-          rating: docUser.rating || 5.0,
-          reviewsCount: docUser.reviewsCount || 10,
           avatar: docUser.avatar || "MD",
           availableToday: docUser.availableToday ?? true,
           hospital: docUser.hospital || "MedSync",
           createdAt: docUser.createdAt.toISOString(),
         };
       }
-    } catch {}
+    } catch (err) {
+      console.error("Resolve doctor error:", err);
+    }
   }
 
-  const docName = doctor?.name || "Dr. Specialist";
-  const specialty = doctor?.specialty || "Specialist";
-  const initials = doctor?.avatar || docName.slice(0, 2).toUpperCase();
+  const docId = matchedDoc?.id || doctorId;
+  const docName = matchedDoc?.name || reqDoctorName || "Dr. Specialist";
+  const specialty = matchedDoc?.specialty || reqSpecialty || "Specialist";
+  const initials = matchedDoc?.avatar || docName.slice(0, 2).toUpperCase();
 
-  // Helper slot parse
-  const parts = slotLabel.trim().split(/\s+/);
-  const time = parts.length >= 2 ? `${parts[parts.length - 2]} ${parts[parts.length - 1]}` : "10:00 AM";
-  const date = parts.length >= 3 ? parts.slice(0, -2).join(" ") : slotLabel.split(" ")[0] || "Today";
+  // Resolve authentic patient name if available
+  let resolvedPatientName = reqPatientName;
+  let resolvedPatientAge = reqPatientAge || 34;
+
+  if (!resolvedPatientName || resolvedPatientName === "Sarah Jenkins") {
+    const memPat = memoryUsers.find(
+      (u) => u.uhid.toLowerCase() === uhid.toLowerCase() || u.email.toLowerCase() === uhid.toLowerCase()
+    );
+    if (memPat && memPat.name) {
+      resolvedPatientName = memPat.name;
+    } else if (getIsMongoConnected()) {
+      try {
+        const pUser = await UserModel.findOne({
+          $or: [{ uhid }, { email: uhid.toLowerCase() }],
+        });
+        if (pUser && pUser.name) {
+          resolvedPatientName = pUser.name;
+        }
+      } catch {}
+    }
+  }
+  if (!resolvedPatientName) resolvedPatientName = "Sarah Jenkins";
+
+  const apptRecord = {
+    patientUhid: uhid,
+    patientName: resolvedPatientName,
+    patientAge: resolvedPatientAge,
+    doctorId: docId,
+    doctorName: docName,
+    specialty,
+    date,
+    time,
+    slotLabel: finalSlotLabel,
+    type: (type === "In-Clinic" ? "In-Clinic" : "Live Chat Consultation") as any,
+    status: "Confirmed",
+    initials,
+    category: "upcoming" as const,
+    complaint: complaint || "Clinical consult",
+  };
 
   try {
     if (getIsMongoConnected()) {
-      const created = await AppointmentModel.create({
-        patientUhid: uhid,
-        patientName: patientName || "Sarah Jenkins",
-        patientAge: patientAge || 34,
-        doctorId,
-        doctorName: docName,
-        specialty,
-        date,
-        time,
-        slotLabel,
-        type: type === "In-Clinic" ? "In-Clinic" : "Live Chat Consultation",
-        status: "Confirmed",
-        initials,
-        category: "upcoming",
-        complaint: complaint || "Clinical consult",
+      const created = await AppointmentModel.create(apptRecord);
+      const apptObj = { id: created._id.toString(), ...created.toObject() };
+
+      // Also sync to memoryAppointments
+      memoryAppointments.unshift({
+        id: created._id.toString(),
+        ...apptRecord,
+        createdAt: new Date().toISOString(),
       });
 
-      const apptObj = { id: created._id.toString(), ...created.toObject() };
       broadcastUpdate({ type: "appointment_booked", patientUhid: uhid, appointment: apptObj });
       return res.status(201).json({ success: true, appointment: apptObj });
     }
@@ -1514,20 +1605,7 @@ app.post("/api/patients/:uhid/appointments", async (req: Request, res: Response)
 
   const memAppt = {
     id: `appt-${Date.now()}`,
-    patientUhid: uhid,
-    patientName: patientName || "Sarah Jenkins",
-    patientAge: patientAge || 34,
-    doctorId,
-    doctorName: docName,
-    specialty,
-    date,
-    time,
-    slotLabel,
-    type: (type === "In-Clinic" ? "In-Clinic" : "Live Chat Consultation") as any,
-    status: "Confirmed",
-    initials,
-    category: "upcoming" as const,
-    complaint: complaint || "Clinical consult",
+    ...apptRecord,
     createdAt: new Date().toISOString(),
   };
 
@@ -1592,41 +1670,116 @@ app.delete("/api/appointments/:appointmentId", handleCancelAppointment);
 // GET /api/doctors/:doctorId/schedule — Doctor's live appointment schedule
 app.get("/api/doctors/:doctorId/schedule", async (req: Request, res: Response) => {
   const { doctorId } = req.params;
+
+  const docIdentifiers = [doctorId];
+  const docNames = [doctorId];
+
+  // 1. Search in memoryDoctors
+  const memDoc = memoryDoctors.find(
+    (d) =>
+      d.id === doctorId ||
+      d.uhid === doctorId ||
+      d.email.toLowerCase() === doctorId.toLowerCase() ||
+      d.name.toLowerCase() === doctorId.toLowerCase()
+  );
+  if (memDoc) {
+    if (memDoc.id) docIdentifiers.push(memDoc.id);
+    if (memDoc.uhid) docIdentifiers.push(memDoc.uhid);
+    if (memDoc.email) docIdentifiers.push(memDoc.email);
+    if (memDoc.name) docNames.push(memDoc.name);
+  }
+
+  // 2. Search in MongoDB UserModel
+  if (getIsMongoConnected()) {
+    try {
+      const isHexId = doctorId.match(/^[0-9a-fA-F]{24}$/);
+      const orList: any[] = [
+        { uhid: doctorId },
+        { email: doctorId.toLowerCase() },
+        { name: doctorId },
+      ];
+      if (isHexId) orList.unshift({ _id: doctorId });
+
+      const mongoDoc = await UserModel.findOne({
+        role: "doctor",
+        $or: orList,
+      });
+
+      if (mongoDoc) {
+        docIdentifiers.push(mongoDoc._id.toString());
+        if (mongoDoc.uhid) docIdentifiers.push(mongoDoc.uhid);
+        if (mongoDoc.email) docIdentifiers.push(mongoDoc.email);
+        if (mongoDoc.name) docNames.push(mongoDoc.name);
+      }
+    } catch (err) {}
+  }
+
+  const uniqueIds = Array.from(new Set(docIdentifiers));
+  const uniqueNames = Array.from(new Set(docNames));
+
   try {
     if (getIsMongoConnected()) {
+      const orClauses: any[] = [
+        { doctorId: { $in: uniqueIds } },
+        { doctorName: { $in: uniqueNames } },
+      ];
+      uniqueNames.forEach((n) => {
+        const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        orClauses.push({ doctorName: new RegExp(escaped, "i") });
+      });
+
       const appts = await AppointmentModel.find({
-        $or: [{ doctorId }, { doctorName: new RegExp(doctorId, "i") }],
+        $or: orClauses,
         status: { $ne: "Cancelled" },
       }).sort({ createdAt: -1 });
 
       return res.json(
         appts.map((a) => ({
           id: a._id.toString(),
-          name: a.patientName || "Sarah Jenkins",
+          name: a.patientName || "Patient",
+          patientName: a.patientName || "Patient",
+          uhid: a.patientUhid || "P-4821",
           age: a.patientAge || 34,
+          patientAge: a.patientAge || 34,
           time: a.time,
           date: a.date,
           type: a.type,
           status: a.status,
-          initials: a.patientName ? a.patientName.slice(0, 2).toUpperCase() : "SJ",
+          initials: a.patientName ? a.patientName.slice(0, 2).toUpperCase() : "PT",
           complaint: a.complaint || "Clinical review",
+          doctorId: a.doctorId,
+          doctorName: a.doctorName,
         }))
       );
     }
-  } catch {}
+  } catch (err) {
+    console.error("Fetch doctor schedule Mongo error:", err);
+  }
 
   const schedule = memoryAppointments
-    .filter((a) => a.status !== "Cancelled" && a.category !== "cancelled")
+    .filter((a) => {
+      if (a.status === "Cancelled" || a.category === "cancelled") return false;
+      const idMatch = uniqueIds.includes(a.doctorId);
+      const nameMatch = uniqueNames.some((n) =>
+        a.doctorName.toLowerCase().includes(n.toLowerCase())
+      );
+      return idMatch || nameMatch;
+    })
     .map((a) => ({
       id: a.id,
       name: a.patientName,
+      patientName: a.patientName,
+      uhid: a.patientUhid,
       age: a.patientAge,
+      patientAge: a.patientAge,
       time: a.time,
       date: a.date,
       type: a.type,
       status: a.status,
       initials: a.initials,
       complaint: a.complaint,
+      doctorId: a.doctorId,
+      doctorName: a.doctorName,
     }));
   res.json(schedule);
 });
@@ -1684,35 +1837,43 @@ app.get("/api/doctors/:doctorId/patients", async (_req: Request, res: Response) 
 // GET /api/patients/:uhid/records — Live medical records & lab reports
 app.get("/api/patients/:uhid/records", async (req: Request, res: Response) => {
   const { uhid } = req.params;
+  const targetUhids = [uhid];
+
   try {
     if (getIsMongoConnected()) {
-      const records = await MedicalRecordModel.find({ patientUhid: uhid }).sort({ createdAt: -1 });
-      if (records.length > 0) {
-        return res.json(
-          records.map((r) => ({
-            id: r._id.toString(),
-            patientUhid: r.patientUhid,
-            title: r.title,
-            type: r.type,
-            date: r.date || new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            doctorName: r.doctorName || "MedSync Clinical AI",
-            specialty: r.specialty || "Diagnostic Pathology",
-            status: r.status || "Verified",
-            isOptimal: r.isOptimal,
-            summary: r.summary,
-            biomarkers: r.biomarkers,
-            recommendations: r.recommendations,
-          }))
-        );
+      if (uhid.includes("@") || uhid.match(/^[0-9a-fA-F]{24}$/)) {
+        const u = await UserModel.findOne({ $or: [{ email: uhid.toLowerCase() }, { _id: uhid }] });
+        if (u) {
+          targetUhids.push(u.uhid, u._id.toString());
+        }
       }
+      const records = await MedicalRecordModel.find({ patientUhid: { $in: targetUhids } }).sort({ createdAt: -1 });
+      return res.json(
+        records.map((r) => ({
+          id: r._id.toString(),
+          patientUhid: r.patientUhid,
+          title: r.title,
+          type: r.type,
+          date: r.date || new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          doctorName: r.doctorName || "MedSync Clinical AI",
+          specialty: r.specialty || "Diagnostic Pathology",
+          status: r.status || "Verified",
+          isOptimal: r.isOptimal,
+          summary: r.summary,
+          biomarkers: r.biomarkers,
+          recommendations: r.recommendations,
+        }))
+      );
     }
   } catch (err) {
     console.error("Fetch records error:", err);
   }
-  res.json(memoryRecords.filter((r) => r.patientUhid === uhid));
+
+  const normalized = uhid.toLowerCase();
+  res.json(memoryRecords.filter((r) => r.patientUhid.toLowerCase() === normalized || targetUhids.includes(r.patientUhid)));
 });
 
-// POST /api/patients/:uhid/records — Save new analyzed clinical record to MongoDB
+// POST /api/patients/:uhid/records — Save new analyzed clinical record to MongoDB & Memory
 app.post("/api/patients/:uhid/records", async (req: Request, res: Response) => {
   const { uhid } = req.params;
   const {
@@ -1732,21 +1893,31 @@ app.post("/api/patients/:uhid/records", async (req: Request, res: Response) => {
   const doc = doctorName || "MedSync Clinical AI";
   const spec = specialty || "Diagnostic Pathology";
 
+  const recordPayload = {
+    patientUhid: uhid,
+    title: title || "Diagnostic Analysis Report",
+    type,
+    date: recordDate,
+    doctorName: doc,
+    specialty: spec,
+    status: "Verified",
+    summary: summary || "",
+    biomarkers,
+    recommendations,
+    isOptimal,
+  };
+
   try {
     if (getIsMongoConnected()) {
-      const created = await MedicalRecordModel.create({
-        patientUhid: uhid,
-        title: title || "Diagnostic Analysis Report",
-        type,
-        date: recordDate,
-        doctorName: doc,
-        specialty: spec,
-        status: "Verified",
-        summary: summary || "",
-        biomarkers,
-        recommendations,
-        isOptimal,
-      });
+      const created = await MedicalRecordModel.create(recordPayload);
+
+      // Also unshift to memoryRecords so it is available everywhere
+      const memObj = {
+        id: created._id.toString(),
+        ...recordPayload,
+        createdAt: new Date().toISOString(),
+      };
+      memoryRecords.unshift(memObj);
 
       broadcastUpdate({ type: "record_added", patientUhid: uhid, record: created });
       return res.status(201).json({ success: true, record: created });
@@ -1757,17 +1928,7 @@ app.post("/api/patients/:uhid/records", async (req: Request, res: Response) => {
 
   const memRec = {
     id: `rec-${Date.now()}`,
-    patientUhid: uhid,
-    title: title || "Diagnostic Analysis Report",
-    type,
-    date: recordDate,
-    doctorName: doc,
-    specialty: spec,
-    status: "Verified",
-    isOptimal,
-    summary,
-    biomarkers,
-    recommendations,
+    ...recordPayload,
     createdAt: new Date().toISOString(),
   };
   memoryRecords.unshift(memRec);

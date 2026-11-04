@@ -907,6 +907,7 @@ export default function PatientRecords({
       >
         <AIScanScreen
           type="report"
+          patientUhid={userUhid}
           onClose={() => {
             setAiOpen(false);
             fetchRecords();

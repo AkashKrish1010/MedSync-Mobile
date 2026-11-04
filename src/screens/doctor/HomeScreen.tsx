@@ -75,8 +75,14 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
       try {
         const res = await fetch(Config.apiDoctorSchedule(doctorId));
         const data = await res.json();
-        if (isMounted && Array.isArray(data) && data.length > 0) {
-          setAppointments(data);
+        if (isMounted && Array.isArray(data)) {
+          if (data.length > 0) {
+            setAppointments(data);
+          } else if (doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor")) {
+            // Keep default demo appointments for Dr. Taylor Reynolds if no active encounters
+          } else {
+            setAppointments([]);
+          }
         }
       } catch {}
     };

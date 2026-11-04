@@ -42,6 +42,7 @@ interface AIScanScreenProps {
   type: "report" | "symptom";
   onClose: () => void;
   onRecordSaved?: (record: any) => void;
+  patientUhid?: string;
 }
 
 const samplePrompts = {
@@ -85,7 +86,7 @@ function isMedicalReportText(inputText: string): boolean {
   return medicalTerms.some((term) => lower.includes(term));
 }
 
-export default function AIScanScreen({ type, onClose, onRecordSaved }: AIScanScreenProps) {
+export default function AIScanScreen({ type, onClose, onRecordSaved, patientUhid }: AIScanScreenProps) {
   const navigation = useNavigation<any>();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -124,8 +125,9 @@ export default function AIScanScreen({ type, onClose, onRecordSaved }: AIScanScr
     const target = customResult || result;
     if (!target || savingRecord) return false;
     setSavingRecord(true);
+    const targetUhid = patientUhid || DEMO_PATIENT_UHID;
     try {
-      const res = await fetch(Config.apiPatientRecords(DEMO_PATIENT_UHID), {
+      const res = await fetch(Config.apiPatientRecords(targetUhid), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

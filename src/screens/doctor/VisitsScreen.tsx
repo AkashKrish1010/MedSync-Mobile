@@ -58,18 +58,24 @@ export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoc
       try {
         const res = await fetch(Config.apiDoctorSchedule(doctorId));
         const data = await res.json();
-        if (isMounted && Array.isArray(data) && data.length > 0) {
-          setVisits(
-            data.map((item: any) => ({
-              id: item.id,
-              patient: item.name,
-              time: item.time,
-              date: item.date || "Today",
-              type: item.type,
-              status: item.status,
-              complaint: item.complaint || "Clinical review",
-            }))
-          );
+        if (isMounted && Array.isArray(data)) {
+          if (data.length > 0) {
+            setVisits(
+              data.map((item: any) => ({
+                id: item.id,
+                patient: item.name,
+                time: item.time,
+                date: item.date || "Today",
+                type: item.type,
+                status: item.status,
+                complaint: item.complaint || "Clinical review",
+              }))
+            );
+          } else if (doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor")) {
+            // Keep default demo encounters for Dr. Taylor Reynolds if no active appointments
+          } else {
+            setVisits([]);
+          }
         }
       } catch {}
     };
