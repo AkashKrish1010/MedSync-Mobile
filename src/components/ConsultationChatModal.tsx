@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import {
   Send,
@@ -75,6 +76,7 @@ export default function ConsultationChatModal({
   otherParticipant,
 }: ConsultationChatModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [inputText, setInputText] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [otherOnline, setOtherOnline] = useState(true);
@@ -147,9 +149,11 @@ export default function ConsultationChatModal({
         wsRef.current = null;
       }
       setIsConnected(false);
+      setLoadingHistory(true);
       return;
     }
 
+    setLoadingHistory(true);
     // 1. Initial REST fetch for instant history load
     fetch(Config.apiChatRoom(room))
       .then((res) => res.json())
@@ -158,7 +162,10 @@ export default function ConsultationChatModal({
           setMessages(data.messages);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setLoadingHistory(false);
+      });
 
     // 2. Establish WebSocket connection
     try {
@@ -445,6 +452,12 @@ export default function ConsultationChatModal({
           contentContainerStyle={styles.messageListContent}
           showsVerticalScrollIndicator={false}
         >
+          {loadingHistory && messages.length === 0 ? (
+            <View style={styles.chatLoadingContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.chatLoadingText}>Connecting to secure clinical chat stream...</Text>
+            </View>
+          ) : null}
           {messages.map((msg) => {
             const isMe = msg.senderRole === currentUser.role;
             const isSystem = msg.senderRole === "system";
@@ -510,7 +523,7 @@ export default function ConsultationChatModal({
                     </Text>
                     {isMe && (
                       <View style={styles.readReceipt}>
-                        <CheckCheck size={14} color="#FFFFFF" strokeWidth={2.4} />
+                        <CheckCheck size={14} color="#FFFFFF" strokeWidth={2.2} />
                       </View>
                     )}
                   </View>
@@ -980,14 +993,14 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.headlineBold,
   },
   messageBubble: {
-    maxWidth: "100%",
-    minWidth: 92,
+    maxWidth: "85%",
+    minWidth: 116,
     flexShrink: 1,
     borderRadius: Radius.xl,
     paddingLeft: 14,
     paddingRight: 16,
     paddingTop: 10,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   bubbleLeft: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -1001,6 +1014,7 @@ const styles = StyleSheet.create({
   bubbleRight: {
     backgroundColor: Colors.primary,
     borderBottomRightRadius: 4,
+    paddingRight: 18,
   },
   senderLabel: {
     fontSize: 10,
@@ -1027,25 +1041,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     flexWrap: "nowrap",
-    gap: 4,
-    marginTop: 6,
+    gap: 6,
+    marginTop: 4,
     paddingTop: 2,
-    paddingRight: 2,
+    paddingRight: 4,
     minHeight: 18,
   },
   bubbleTime: {
     fontSize: 10,
     fontFamily: FontFamily.dataMono,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   readReceipt: {
     flexShrink: 0,
-    width: 20,
-    height: 16,
-    marginLeft: 3,
+    width: 22,
+    height: 18,
+    marginLeft: 4,
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
+  },
+  chatLoadingContainer: {
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  chatLoadingText: {
+    fontSize: 12,
+    color: Colors.outline,
+    fontFamily: FontFamily.bodyRegular,
   },
   suggestionsContainer: {
     backgroundColor: Colors.surfaceContainerLowest,

@@ -115,6 +115,7 @@ export default function PatientRecords({
   const [aiOpen, setAiOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [records, setRecords] = useState<HealthRecord[]>(isDemoAccount ? HEALTH_RECORDS : []);
+  const [loadingRecords, setLoadingRecords] = useState(true);
 
   // Plain-English AI Explanation State
   const [aiExplanationVisible, setAiExplanationVisible] = useState(false);
@@ -152,7 +153,8 @@ export default function PatientRecords({
     });
   };
 
-  const fetchRecords = useCallback(async () => {
+  const fetchRecords = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoadingRecords(true);
     try {
       const res = await fetch(Config.apiPatientRecords(userUhid));
       const data = await res.json();
@@ -192,13 +194,16 @@ export default function PatientRecords({
           setRecords([]);
         }
       }
-    } catch {}
+    } catch {
+    } finally {
+      if (isInitial) setLoadingRecords(false);
+    }
   }, [userUhid, isDemoAccount]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchRecords();
-      const interval = setInterval(fetchRecords, 5000);
+      fetchRecords(true);
+      const interval = setInterval(() => fetchRecords(false), 5000);
       return () => clearInterval(interval);
     }, [fetchRecords])
   );
@@ -424,7 +429,12 @@ export default function PatientRecords({
 
       {/* Records List */}
       <Text style={styles.sectionLabel}>CLINICAL ARCHIVES</Text>
-      {records.length === 0 ? (
+      {loadingRecords && records.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Fetching diagnostic lab archives...</Text>
+        </View>
+      ) : records.length === 0 ? (
         <View style={styles.emptyContainer}>
           <FileText size={32} color={Colors.outline} />
           <Text style={styles.emptyTitle}>No Diagnostic Lab Archives</Text>
@@ -1586,5 +1596,16 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bodyRegular,
     textAlign: "center",
     lineHeight: 18,
+  },
+  loadingContainer: {
+    paddingVertical: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
   },
 });

@@ -38,7 +38,7 @@ export function usePatientClinical(uhid: string = DEMO_PATIENT_UHID) {
   const [meds, setMeds] = useState<ApiMedication[]>([]);
   const [nextAppointment, setNextAppointment] = useState<ApiAppointment | null>(null);
   const [inbox, setInbox] = useState<PatientInbox>({ unreadDoctorMessages: 0 });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);

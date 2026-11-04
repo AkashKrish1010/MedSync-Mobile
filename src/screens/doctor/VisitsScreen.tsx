@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import {
   Calendar,
@@ -40,7 +41,9 @@ interface Visit {
 export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoctorProfile | null }) {
   const doctorId = doctorProfile?.id ?? "doc-001";
   const doctorName = doctorProfile?.name ?? "Dr. Taylor Reynolds";
-  const [visits, setVisits] = useState<Visit[]>(DOCTOR_ENCOUNTERS);
+  const isDemoDoc = doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor");
+  const [visits, setVisits] = useState<Visit[]>(isDemoDoc ? DOCTOR_ENCOUNTERS : []);
+  const [loading, setLoading] = useState(true);
   const [cancelConfirmVisit, setCancelConfirmVisit] = useState<Visit | null>(null);
   const [visitAlert, setVisitAlert] = useState<{
     visible: boolean;
@@ -54,7 +57,8 @@ export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoc
 
   useEffect(() => {
     let isMounted = true;
-    const fetchEncounters = async () => {
+    const fetchEncounters = async (isInitial = false) => {
+      if (isInitial) setLoading(true);
       try {
         const res = await fetch(Config.apiDoctorSchedule(doctorId));
         const data = await res.json();
@@ -71,22 +75,25 @@ export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoc
                 complaint: item.complaint || "Clinical review",
               }))
             );
-          } else if (doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor")) {
+          } else if (isDemoDoc) {
             // Keep default demo encounters for Dr. Taylor Reynolds if no active appointments
           } else {
             setVisits([]);
           }
         }
-      } catch {}
+      } catch {
+      } finally {
+        if (isMounted && isInitial) setLoading(false);
+      }
     };
 
-    fetchEncounters();
-    const interval = setInterval(fetchEncounters, 5000);
+    fetchEncounters(true);
+    const interval = setInterval(() => fetchEncounters(false), 5000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [doctorId]);
+  }, [doctorId, isDemoDoc]);
 
   const [activeVisit, setActiveVisit] = useState<Visit | null>(null);
 
@@ -121,7 +128,21 @@ export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoc
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Text style={styles.heading}>Patient Encounters</Text>
-      {visits.map((v) => (
+      {loading && visits.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading clinical encounters...</Text>
+        </View>
+      ) : visits.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Calendar size={36} color={Colors.outline} />
+          <Text style={styles.emptyTitle}>No Clinical Encounters Found</Text>
+          <Text style={styles.emptySub}>
+            Patient bookings and clinical visits for your schedule will appear here.
+          </Text>
+        </View>
+      ) : (
+        visits.map((v) => (
         <View key={v.id} style={styles.card}>
           <View style={styles.cardTop}>
             <View style={styles.iconBox}>
@@ -189,7 +210,7 @@ export default function DoctorVisits({ doctorProfile }: { doctorProfile: AuthDoc
             </TouchableOpacity>
           </View>
         </View>
-      ))}
+      )))}
 
       {/* Note Modal */}
       <Modal visible={noteModalOpen} transparent animationType="slide" onRequestClose={() => setNoteModalOpen(false)}>
@@ -408,4 +429,38 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   saveBtnText: { fontSize: FontSize.labelMd, color: Colors.onPrimary, fontFamily: FontFamily.bodySemiBold },
+  loadingContainer: {
+    paddingVertical: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  emptyContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+    marginVertical: 4,
+  },
+  emptyTitle: {
+    fontSize: FontSize.headlineSm,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.headlineSemiBold,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: FontSize.bodySm,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyRegular,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

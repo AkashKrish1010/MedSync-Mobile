@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   MessageSquare,
   User,
+  Users,
   X,
   Pill,
   Plus,
@@ -79,24 +80,29 @@ export default function DoctorPatients({
   });
 
   const [patients, setPatients] = useState<PatientRecord[]>(DOCTOR_PATIENT_REGISTRY);
+  const [loadingPatients, setLoadingPatients] = useState(true);
 
   const doctorId = doctorProfile?.id ?? "doc-001";
   const doctorName = doctorProfile?.name ?? "Dr. Taylor Reynolds";
 
   useEffect(() => {
     let isMounted = true;
-    const fetchPatients = async () => {
+    const fetchPatients = async (isInitial = false) => {
+      if (isInitial) setLoadingPatients(true);
       try {
         const res = await fetch(Config.apiDoctorPatients(doctorId));
         const data = await res.json();
         if (isMounted && Array.isArray(data) && data.length > 0) {
           setPatients(data);
         }
-      } catch {}
+      } catch {
+      } finally {
+        if (isMounted && isInitial) setLoadingPatients(false);
+      }
     };
 
-    fetchPatients();
-    const interval = setInterval(fetchPatients, 6000);
+    fetchPatients(true);
+    const interval = setInterval(() => fetchPatients(false), 6000);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -217,7 +223,25 @@ export default function DoctorPatients({
         )}
       </View>
 
-      {filtered.map((p) => (
+      {loadingPatients && patients.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading patient registry...</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Users size={36} color={Colors.outline} />
+          <Text style={styles.emptyTitle}>
+            {search.trim() ? "No matching patients" : "No patients in registry"}
+          </Text>
+          <Text style={styles.emptySub}>
+            {search.trim()
+              ? `No records found matching "${search}".`
+              : "Patients assigned or scheduled for clinical review will appear here."}
+          </Text>
+        </View>
+      ) : (
+        filtered.map((p) => (
         <View key={p.id} style={styles.card}>
           <View style={styles.cardTop}>
             <View style={styles.avatarCircle}>
@@ -263,7 +287,7 @@ export default function DoctorPatients({
             </View>
           </View>
         </View>
-      ))}
+      )))}
 
       {/* Patient Chart Modal */}
       <Modal visible={profileModalOpen} transparent animationType="slide" onRequestClose={() => setProfileModalOpen(false)}>
@@ -492,4 +516,38 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, color: Colors.onSurfaceVariant, fontFamily: FontFamily.bodyMedium, marginTop: 4 },
   formInput: { backgroundColor: Colors.surfaceContainerLow, borderRadius: Radius.md, padding: 10, fontSize: FontSize.bodyMd, color: Colors.onSurface, fontFamily: FontFamily.bodyRegular },
   saveMedBtn: { height: 44, borderRadius: Radius.lg, backgroundColor: Colors.primary, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 8 },
+  loadingContainer: {
+    paddingVertical: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  emptyContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+    marginVertical: 4,
+  },
+  emptyTitle: {
+    fontSize: FontSize.headlineSm,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.headlineSemiBold,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: FontSize.bodySm,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyRegular,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import {
   Calendar,
@@ -57,6 +58,7 @@ export default function PatientVisits({
 
   const [filter, setFilter] = useState<"upcoming" | "past" | "cancelled">("upcoming");
   const filters: Array<"upcoming" | "past" | "cancelled"> = ["upcoming", "past", "cancelled"];
+  const [loading, setLoading] = useState(true);
   const [appts, setAppts] = useState<{
     upcoming: AppointmentItem[];
     past: AppointmentItem[];
@@ -64,6 +66,7 @@ export default function PatientVisits({
   }>({ upcoming: [], past: [], cancelled: [] });
 
   const loadAppointments = useCallback(() => {
+    setLoading(true);
     fetch(Config.apiPatientAppointments(userUhid))
       .then((r) => r.json())
       .then((data) => {
@@ -75,8 +78,9 @@ export default function PatientVisits({
           });
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userUhid]);
 
   useFocusEffect(
     useCallback(() => {
@@ -187,13 +191,22 @@ export default function PatientVisits({
         ))}
       </View>
 
-      {visibleAppts.length === 0 && (
-        <Text style={styles.emptyHint}>
-          {filter === "upcoming"
-            ? "No upcoming visits. Book from Home or use Book New Encounter below."
-            : `No ${filter} visits on file.`}
-        </Text>
-      )}
+      {loading && visibleAppts.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading consultation schedule...</Text>
+        </View>
+      ) : visibleAppts.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Calendar size={36} color={Colors.outline} />
+          <Text style={styles.emptyTitle}>No {filter} consultations</Text>
+          <Text style={styles.emptyHint}>
+            {filter === "upcoming"
+              ? "You have no upcoming consultations scheduled. Tap 'Book New Encounter' below to meet with a specialist."
+              : `No ${filter} visits found on your patient chart.`}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Appointment Cards */}
       {visibleAppts.map((appt) => {
@@ -476,6 +489,32 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bodyRegular,
     textAlign: "center",
     paddingVertical: Spacing.sm,
+  },
+  loadingContainer: {
+    paddingVertical: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  emptyContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+  },
+  emptyTitle: {
+    fontSize: FontSize.headlineSm,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.headlineSemiBold,
+    marginTop: 4,
   },
   card: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.xl, padding: Spacing.sm, gap: Spacing.xs, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },

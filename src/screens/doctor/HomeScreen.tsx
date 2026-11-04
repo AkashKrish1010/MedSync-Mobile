@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import {
   Calendar,
@@ -57,7 +58,9 @@ function getTimeOfDayGreeting(): string {
 export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDoctorProfile | null }) {
   const doctorId = doctorProfile?.id ?? "doc-001";
   const doctorName = doctorProfile?.name ?? "Dr. Taylor Reynolds";
-  const [appointments, setAppointments] = useState<Appointment[]>(DOCTOR_DAY_SCHEDULE);
+  const isDemoDoc = doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor");
+  const [appointments, setAppointments] = useState<Appointment[]>(isDemoDoc ? DOCTOR_DAY_SCHEDULE : []);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
   const [cancelConfirmAppt, setCancelConfirmAppt] = useState<Appointment | null>(null);
   const [docAlert, setDocAlert] = useState<{
     visible: boolean;
@@ -71,29 +74,33 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
 
   useEffect(() => {
     let isMounted = true;
-    const fetchSchedule = async () => {
+    const fetchSchedule = async (isInitial = false) => {
+      if (isInitial) setScheduleLoading(true);
       try {
         const res = await fetch(Config.apiDoctorSchedule(doctorId));
         const data = await res.json();
         if (isMounted && Array.isArray(data)) {
           if (data.length > 0) {
             setAppointments(data);
-          } else if (doctorId === "doc-001" || doctorProfile?.email?.toLowerCase().includes("taylor")) {
+          } else if (isDemoDoc) {
             // Keep default demo appointments for Dr. Taylor Reynolds if no active encounters
           } else {
             setAppointments([]);
           }
         }
-      } catch {}
+      } catch {
+      } finally {
+        if (isMounted && isInitial) setScheduleLoading(false);
+      }
     };
 
-    fetchSchedule();
-    const interval = setInterval(fetchSchedule, 5000);
+    fetchSchedule(true);
+    const interval = setInterval(() => fetchSchedule(false), 5000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [doctorId]);
+  }, [doctorId, isDemoDoc]);
 
   // Modals state
   const [rxModalOpen, setRxModalOpen] = useState(false);
@@ -225,7 +232,21 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
         </View>
       </View>
 
-      {appointments.map((appt) => (
+      {scheduleLoading && appointments.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading scheduled consultations...</Text>
+        </View>
+      ) : appointments.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Calendar size={36} color={Colors.outline} />
+          <Text style={styles.emptyTitle}>No Consultations Scheduled Today</Text>
+          <Text style={styles.emptySub}>
+            Patient bookings and clinical appointments will appear here as they are scheduled.
+          </Text>
+        </View>
+      ) : (
+        appointments.map((appt) => (
         <View key={appt.id} style={styles.scheduleCard}>
           {/* Top Bar: Time, Type, Status */}
           <View style={styles.scheduleCardTop}>
@@ -342,7 +363,7 @@ export default function DoctorHome({ doctorProfile }: { doctorProfile: AuthDocto
             </TouchableOpacity>
           </View>
         </View>
-      ))}
+      )))}
 
       {/* ─── MODAL 1: Write Prescription ─── */}
       <Modal visible={rxModalOpen} transparent animationType="slide" onRequestClose={() => setRxModalOpen(false)}>
@@ -879,4 +900,38 @@ const styles = StyleSheet.create({
   labPanelText: { fontSize: FontSize.bodySm, color: Colors.onSurface, flex: 1 },
   chartDetailsBox: { backgroundColor: Colors.surfaceContainerLow, borderRadius: Radius.lg, padding: Spacing.sm, gap: 6, marginVertical: Spacing.xs },
   chartDetailRow: { fontSize: FontSize.bodySm, color: Colors.onSurface, fontFamily: FontFamily.bodyRegular },
+  loadingContainer: {
+    paddingVertical: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: FontSize.bodyMd,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  emptyContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+    marginVertical: 4,
+  },
+  emptyTitle: {
+    fontSize: FontSize.headlineSm,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.headlineSemiBold,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: FontSize.bodySm,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyRegular,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

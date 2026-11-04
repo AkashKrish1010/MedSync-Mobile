@@ -85,6 +85,7 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
     meds,
     nextAppointment,
     inbox,
+    loading: clinicalLoading,
     refresh: refreshClinical,
     toggleMedTaken,
     markInboxRead,
@@ -260,7 +261,12 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardLabel}>NEXT APPOINTMENT</Text>
-          {nextAppointment ? (
+          {clinicalLoading && !nextAppointment ? (
+            <View style={[styles.confirmedBadge, { backgroundColor: Colors.surfaceContainerHigh }]}>
+              <ActivityIndicator size="small" color={Colors.primary} style={{ transform: [{ scale: 0.7 }], marginRight: 4 }} />
+              <Text style={[styles.confirmedText, { color: Colors.primary }]}>Syncing...</Text>
+            </View>
+          ) : nextAppointment ? (
             <View style={styles.confirmedBadge}>
               <View style={styles.confirmedDot} />
               <Text style={styles.confirmedText}>Confirmed</Text>
@@ -365,11 +371,16 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
 
       {/* Medication Cards List */}
       <View style={{ gap: Spacing.xs }}>
-        {meds.length === 0 && (
+        {clinicalLoading && meds.length === 0 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14 }}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.doctorsLoadingText}>Syncing prescribed medications...</Text>
+          </View>
+        ) : meds.length === 0 ? (
           <Text style={styles.doctorsEmptyText}>
             Your care regimen will appear here when your doctor prescribes medications.
           </Text>
-        )}
+        ) : null}
         {meds.map((med) => (
           <TouchableOpacity
             key={med.id}
