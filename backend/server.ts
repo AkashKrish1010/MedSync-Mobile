@@ -2324,10 +2324,29 @@ app.post("/api/analyze-file", fileOrJsonUpload, async (req: Request, res: Respon
     base64Data = file.buffer.toString("base64");
     rawMime = file.mimetype || "";
     fileName = file.originalname || "uploaded_report";
-  } else if (req.body && req.body.base64) {
-    base64Data = req.body.base64;
-    rawMime = req.body.mimeType || "";
+  } else if (req.body) {
+    base64Data =
+      req.body.base64 ||
+      req.body.imageBase64 ||
+      req.body.image ||
+      req.body.data ||
+      null;
+    rawMime = req.body.mimeType || req.body.mimetype || "";
     fileName = req.body.fileName || "uploaded_report";
+  }
+
+  // Strip data URI scheme if present (e.g. data:image/jpeg;base64,...)
+  if (base64Data && typeof base64Data === "string") {
+    if (base64Data.startsWith("data:")) {
+      const match = base64Data.match(/^data:([^;]+);base64,(.+)$/s);
+      if (match) {
+        if (!rawMime) rawMime = match[1];
+        base64Data = match[2];
+      } else {
+        base64Data = base64Data.replace(/^data:[^;]+;base64,/, "");
+      }
+    }
+    base64Data = base64Data.trim();
   }
 
   if (!base64Data) {
@@ -2460,10 +2479,29 @@ app.post("/api/scan-prescription", fileOrJsonUpload, async (req: Request, res: R
     base64Data = file.buffer.toString("base64");
     rawMime = file.mimetype || "";
     fileName = file.originalname || "uploaded_prescription";
-  } else if (req.body && req.body.base64) {
-    base64Data = req.body.base64;
-    rawMime = req.body.mimeType || "";
+  } else if (req.body) {
+    base64Data =
+      req.body.base64 ||
+      req.body.imageBase64 ||
+      req.body.image ||
+      req.body.data ||
+      null;
+    rawMime = req.body.mimeType || req.body.mimetype || "";
     fileName = req.body.fileName || "uploaded_prescription";
+  }
+
+  // Strip data URI scheme if present (e.g. data:image/jpeg;base64,...)
+  if (base64Data && typeof base64Data === "string") {
+    if (base64Data.startsWith("data:")) {
+      const match = base64Data.match(/^data:([^;]+);base64,(.+)$/s);
+      if (match) {
+        if (!rawMime) rawMime = match[1];
+        base64Data = match[2];
+      } else {
+        base64Data = base64Data.replace(/^data:[^;]+;base64,/, "");
+      }
+    }
+    base64Data = base64Data.trim();
   }
 
   if (!base64Data) {
