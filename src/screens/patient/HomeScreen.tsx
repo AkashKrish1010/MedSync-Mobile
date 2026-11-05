@@ -400,16 +400,33 @@ export default function PatientHome({ isDemoFlagged, patientProfile }: PatientHo
             activeOpacity={0.7}
           >
             <View style={[styles.checkCircle, med.taken && styles.checkCircleActive]}>
-              {med.taken ? <Check size={14} color={Colors.onPrimary} strokeWidth={3} /> : null}
+              {med.taken ? <Check size={13} color={Colors.onPrimary} strokeWidth={3} /> : null}
             </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={[styles.medName, med.taken && styles.medNameCrossed]}>
-                  {med.name} <Text style={{ fontFamily: FontFamily.dataMono, color: Colors.primary }}>{med.dosage}</Text>
+            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+              <View style={styles.medHeaderRow}>
+                <Text style={[styles.medName, med.taken && styles.medNameCrossed]} numberOfLines={2}>
+                  {med.name}
                 </Text>
-                <Text style={styles.medTime}>{med.timeSlot}</Text>
+                {med.dosage ? (
+                  <View style={styles.medDoseBadge}>
+                    <Text style={styles.medDoseBadgeText}>{med.dosage}</Text>
+                  </View>
+                ) : null}
               </View>
-              <Text style={styles.medInstructions}>{med.instructions} · {med.purpose}</Text>
+              <Text style={styles.medInstructions} numberOfLines={2}>
+                {med.instructions}{med.purpose ? ` · ${med.purpose}` : ""}
+              </Text>
+              <View style={styles.medMetaRow}>
+                <View style={styles.medTimeBadge}>
+                  <Clock size={11} color={Colors.primary} />
+                  <Text style={styles.medTimeBadgeText}>{med.timeSlot}</Text>
+                </View>
+                {med.doctorName && med.doctorName !== "Prescribing Physician" ? (
+                  <Text style={styles.medDoctorText} numberOfLines={1}>
+                    {med.doctorName}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           </TouchableOpacity>
         ))}
@@ -875,14 +892,104 @@ const styles = StyleSheet.create({
   },
   medProgressBar: { height: 6, backgroundColor: Colors.surfaceContainerHigh, borderRadius: 3, overflow: "hidden", marginVertical: 4 },
   medProgressFill: { height: "100%", backgroundColor: Colors.secondary, borderRadius: 3 },
-  medCard: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.lg, padding: 12, borderWidth: 1, borderColor: Colors.outlineVariant, marginBottom: 2 },
-  medCardTaken: { opacity: 0.7, backgroundColor: Colors.surfaceContainerLow },
-  checkCircle: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: Colors.outlineVariant, justifyContent: "center", alignItems: "center" },
-  checkCircleActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
-  medName: { fontSize: FontSize.labelMd, color: Colors.onSurface, fontFamily: FontFamily.bodySemiBold },
-  medNameCrossed: { textDecorationLine: "line-through", color: Colors.onSurfaceVariant },
-  medTime: { fontSize: 10, color: Colors.outline, fontFamily: FontFamily.dataMono },
-  medInstructions: { fontSize: 11, color: Colors.onSurfaceVariant, fontFamily: FontFamily.bodyRegular },
+  medCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    marginBottom: 6,
+    overflow: "hidden",
+  },
+  medCardTaken: {
+    opacity: 0.65,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.outlineVariant,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  checkCircleActive: {
+    backgroundColor: Colors.secondary,
+    borderColor: Colors.secondary,
+  },
+  medHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+    width: "100%",
+  },
+  medName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: FontSize.labelMd,
+    color: Colors.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    flexShrink: 1,
+  },
+  medNameCrossed: {
+    textDecorationLine: "line-through",
+    color: Colors.onSurfaceVariant,
+  },
+  medDoseBadge: {
+    flexShrink: 0,
+    backgroundColor: Colors.primaryFixed + "33",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    alignSelf: "flex-start",
+  },
+  medDoseBadgeText: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontFamily: FontFamily.dataMonoBold,
+  },
+  medInstructions: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontFamily: FontFamily.bodyRegular,
+    lineHeight: 16,
+  },
+  medMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 3,
+  },
+  medTimeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    maxWidth: "100%",
+  },
+  medTimeBadgeText: {
+    fontSize: 10,
+    color: Colors.primary,
+    fontFamily: FontFamily.dataMonoBold,
+    flexShrink: 1,
+  },
+  medDoctorText: {
+    fontSize: 10,
+    color: Colors.outline,
+    fontFamily: FontFamily.bodyMedium,
+    flexShrink: 1,
+  },
   aiRow: { flexDirection: "row", gap: Spacing.xs, marginBottom: 6 },
   aiBtn: {
     flex: 1,

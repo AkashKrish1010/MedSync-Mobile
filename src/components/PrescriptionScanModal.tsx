@@ -385,23 +385,33 @@ export default function PrescriptionScanModal({
                   <View style={[styles.medCheckbox, med.selected && styles.medCheckboxActive]}>
                     {med.selected ? <Check size={14} color="#FFF" strokeWidth={3} /> : null}
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
                     <View style={styles.medNameRow}>
-                      <Text style={styles.medItemName}>{med.name}</Text>
-                      <View style={styles.doseBadge}>
-                        <Text style={styles.doseBadgeText}>{med.dosage}</Text>
-                      </View>
+                      <Text style={styles.medItemName} numberOfLines={2}>
+                        {med.name}
+                      </Text>
+                      {med.dosage ? (
+                        <View style={styles.doseBadge}>
+                          <Text style={styles.doseBadgeText}>{med.dosage}</Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <Text style={styles.medInstructions}>{med.instructions}</Text>
+                    <Text style={styles.medInstructions} numberOfLines={2}>
+                      {med.instructions}
+                    </Text>
                     <View style={styles.medMetaFooter}>
                       <View style={styles.timeTag}>
                         <Clock size={11} color={Colors.primary} />
-                        <Text style={styles.timeTagText}>{med.timeSlot}</Text>
+                        <Text style={styles.timeTagText} numberOfLines={1}>
+                          {med.timeSlot}
+                        </Text>
                       </View>
                       {med.purpose ? (
                         <View style={styles.purposeTag}>
                           <Pill size={11} color={Colors.secondary} />
-                          <Text style={styles.purposeTagText}>{med.purpose}</Text>
+                          <Text style={styles.purposeTagText} numberOfLines={1}>
+                            {med.purpose}
+                          </Text>
                         </View>
                       ) : null}
                     </View>
@@ -770,6 +780,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     borderWidth: 1.5,
     borderColor: Colors.outlineVariant + "44",
+    overflow: "hidden",
   },
   medItemCardActive: {
     borderColor: Colors.primary,
@@ -784,6 +795,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,
   },
   medCheckboxActive: {
     backgroundColor: Colors.primary,
@@ -791,19 +803,26 @@ const styles = StyleSheet.create({
   },
   medNameRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
+    gap: 8,
+    width: "100%",
   },
   medItemName: {
+    flex: 1,
+    minWidth: 0,
     fontSize: FontSize.labelLg,
     color: Colors.onSurface,
     fontFamily: FontFamily.bodySemiBold,
+    flexShrink: 1,
   },
   doseBadge: {
+    flexShrink: 0,
     backgroundColor: Colors.primaryFixed + "33",
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: Radius.full,
+    alignSelf: "flex-start",
   },
   doseBadgeText: {
     fontSize: 11,
@@ -819,8 +838,9 @@ const styles = StyleSheet.create({
   medMetaFooter: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
+    gap: 6,
+    marginTop: 2,
+    width: "100%",
   },
   timeTag: {
     flexDirection: "row",
@@ -829,12 +849,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
+    maxWidth: "100%",
   },
   timeTagText: {
     fontSize: 10,
     color: Colors.primary,
     fontFamily: FontFamily.dataMonoBold,
+    flexShrink: 1,
   },
   purposeTag: {
     flexDirection: "row",
@@ -843,12 +865,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.secondaryContainer + "33",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
+    maxWidth: "100%",
   },
   purposeTagText: {
     fontSize: 10,
     color: Colors.secondary,
     fontFamily: FontFamily.bodyMedium,
+    flexShrink: 1,
   },
   notesBox: {
     backgroundColor: Colors.surfaceContainerLow,
